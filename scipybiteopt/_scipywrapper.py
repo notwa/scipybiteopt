@@ -1,6 +1,8 @@
 from .biteopt import _minimize
 import numpy as np
 
+__source_version__ = "2021.28"
+
 class OptimizeResult(dict):
     r""" Represents the optimization result.
 
@@ -59,7 +61,7 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10):
     upper_bounds = [bound[1] for bound in bounds]
 
     def wrapped_fun(x):
-    #
+    
         return fun(x, *args)
     
     f, x_opt = _minimize(wrapped_fun, lower_bounds, upper_bounds, iters, depth, attempts)

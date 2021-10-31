@@ -1,6 +1,6 @@
 # A python wrapper for biteopt #
 
-This package provides a scipy.optimize like API for the powerful global optimization algorithm biteopt.
+This package provides a scipy.optimize like API for the powerful global optimization algorithm biteopt. It is a fork of [another biteopt wrapper](https://github.com/leonidk/biteopt).
 
 ## Example usage ##
 

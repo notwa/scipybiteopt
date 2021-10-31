@@ -22,12 +22,11 @@ module1 = Extension('scipybiteopt.biteopt',
                   extra_compile_args=['-std=c++11'] if os.name != 'nt' else [])
 
 setup(name='scipybiteopt',
-      version='0.2.2',
-      description="Python Wrapper for Aleksey Vaneev's BiteOpt",
-      author='leonidk',
-      author_email='lkeselman@gmail.com',
-      url = 'https://github.com/leonidk/biteopt',
+      version='0.1',
+      description="Scipy style wrapper for Aleksey Vaneev's BiteOpt",
+      author='dschmitz89',
+      author_email='danielschmitzsiegen@gmail.com',
+      url = 'https://github.com/dschmitz89/scipybiteopt',
       packages = ['scipybiteopt'],
-      #py_modules=[],
       ext_modules = [module1]
      )
