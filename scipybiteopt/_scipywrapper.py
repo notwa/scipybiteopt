@@ -2,6 +2,7 @@ from .biteopt import _minimize
 import numpy as np
 
 __source_version__ = "2021.28"
+__source_hash__ = "8ff656353f42df9e97d62d660c7b76a60ce5cd9b"
 
 class OptimizeResult(dict):
     r""" Represents the optimization result.
@@ -32,7 +33,7 @@ class OptimizeResult(dict):
         else:
             return self.__class__.__name__ + "()"
 
-def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10):
+def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, callback = None):
     '''
     Optimization via the biteopt algorithm
 
@@ -51,7 +52,7 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10):
     iters : int, optional, default 1000
         Number of function evaluations allowed in one attempt
     depth : int, optional, default 1
-        Depth of evolutionary algorithm. Required to be ``<36``. 
+        Depth of evolutionary algorithm. Required to be ``<37``. 
         Multiplies allowed number of function evaluations by :math:`\sqrt{depth}`.
         Setting depth to a higher value increases the chance for convergence for high-dimensional problems.
     attempts : int, optional, default 10
@@ -60,13 +61,22 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10):
     lower_bounds = [bound[0] for bound in bounds]
     upper_bounds = [bound[1] for bound in bounds]
 
-    def wrapped_fun(x):
+    if callback is not None:
+
+        def wrapped_fun(x):
+            
+            callback(x)
+            return fun(x, *args)
     
-        return fun(x, *args)
+    else:
+
+        def wrapped_fun(x):
+        
+            return fun(x, *args)
     
     f, x_opt = _minimize(wrapped_fun, lower_bounds, upper_bounds, iters, depth, attempts)
 
-    nfev = int(iters * np.sqrt(depth)*attempts)
+    nfev = int(iters * depth**0.5 * attempts)
     result = OptimizeResult(x=x_opt, fun = f, nfev=nfev)
     
     return result
