@@ -71,13 +71,14 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, callba
 
     Example
     --------
-    Let's as an example minimize a classical example in global optimization: the Ackley function.
+    Let's minimize a classical example in global optimization: the Ackley function.
+
     >>> import numpy as np
     >>> from scipybiteopt import biteopt
     >>> bounds = [(-5, 5), (-5, 5)]
     >>> def ackley(pos):
-	...        x, y = pos
-	...        return -20.0 * np.exp(-0.2 * np.sqrt(0.5 * (x**2 + y**2))) - np.exp(0.5 * (np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y))) + np.e + 20
+	...     x, y = pos
+	...     return -20.0 * np.exp(-0.2 * np.sqrt(0.5 * (x**2 + y**2))) - np.exp(0.5 * (np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y))) + np.e + 20
     >>> result = biteopt(ackley, bounds)
     >>> result.x, result.fun
     array([0., 0.]), 0.0
