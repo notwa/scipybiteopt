@@ -4,6 +4,11 @@ import sys
 import numpy
 from setuptools import setup, Extension
 
+#include markdown description in pip page
+this_directory = os.path.abspath(os.path.dirname(__file__))
+with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
+
 # https://github.com/pypa/packaging-problems/issues/84
 # no sensible way to include header files by default
 headers = ['scipybiteopt/biteopt.h',
@@ -26,6 +31,9 @@ setup(name='scipybiteopt',
     description="Scipy style wrapper for Aleksey Vaneev's BiteOpt",
     author='dschmitz89',
     author_email='danielschmitzsiegen@gmail.com',
+    license='MIT',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     url = 'https://github.com/dschmitz89/scipybiteopt',
     packages = ['scipybiteopt'],
     ext_modules = [module1],
