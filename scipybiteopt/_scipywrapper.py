@@ -1,5 +1,4 @@
 from .biteopt import _minimize
-import numpy as np
 
 __source_version__ = "2021.28"
 __source_hash__ = "8ff656353f42df9e97d62d660c7b76a60ce5cd9b"
@@ -35,7 +34,7 @@ class OptimizeResult(dict):
 
 def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, callback = None):
     '''
-    Optimization via the biteopt algorithm
+    Global optimization via the biteopt algorithm
 
     Parameters
     ----------
@@ -62,6 +61,26 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, callba
         Must be in the form ``fun(x, *args)``, where ``x`` 
         is the argument in the form of a 1-D numpy array and args is a tuple of any additional fixed 
         parameters needed to completely specify the function.
+
+    Returns
+    -------
+    result : :py:class:`~OptimizeResult`
+        The optimization result represented as a :py:class:`~OptimizeResult` object.
+        Attributes are: ``x`` the solution array, ``fun`` the value
+        of the function at the solution, andthe number of function evaluations``nfev``.
+
+    Example
+    --------
+    Let's as an example minimize a classical example in global optimization: the Ackley function.
+    >>> import numpy as np
+    >>> from scipybiteopt import biteopt
+    >>> bounds = [(-5, 5), (-5, 5)]
+    >>> def ackley(pos):
+	...        x, y = pos
+	...        return -20.0 * np.exp(-0.2 * np.sqrt(0.5 * (x**2 + y**2))) - np.exp(0.5 * (np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y))) + np.e + 20
+    >>> result = biteopt(ackley, bounds)
+    >>> result.x, result.fun
+    array([0., 0.]), 0.0
     '''
     lower_bounds = [bound[0] for bound in bounds]
     upper_bounds = [bound[1] for bound in bounds]
