@@ -41,7 +41,7 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, callba
     ----------
     fun : callable 
         The objective function to be minimized. Must be in the form ``fun(x, *args)``, where ``x`` 
-        is the argument in the form of a 1-D array and args is a tuple of any additional fixed 
+        is the argument in the form of a 1-D numpy array and args is a tuple of any additional fixed 
         parameters needed to completely specify the function.
     bounds : array-like
         Bounds for variables. ``(min, max)`` pairs for each element in ``x``,
@@ -57,6 +57,11 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, callba
         Setting depth to a higher value increases the chance for convergence for high-dimensional problems.
     attempts : int, optional, default 10
         Number of individual optimization attemps
+    callback : callable, optional, default None
+        callback function which is also called before every objective function evaluation. 
+        Must be in the form ``fun(x, *args)``, where ``x`` 
+        is the argument in the form of a 1-D numpy array and args is a tuple of any additional fixed 
+        parameters needed to completely specify the function.
     '''
     lower_bounds = [bound[0] for bound in bounds]
     upper_bounds = [bound[1] for bound in bounds]
