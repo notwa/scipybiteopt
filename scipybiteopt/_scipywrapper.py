@@ -76,12 +76,14 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, callba
     >>> import numpy as np
     >>> from scipybiteopt import biteopt
     >>> bounds = [(-5, 5), (-5, 5)]
-    >>> def ackley(pos):
-	...     x, y = pos
-	...     return -20.0 * np.exp(-0.2 * np.sqrt(0.5 * (x**2 + y**2))) - np.exp(0.5 * (np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y))) + np.e + 20
+    >>> def ackley(x):
+    ...     arg1 = -0.2 * np.sqrt(0.5 * (x[0] ** 2 + x[1] ** 2))
+    ...     arg2 = 0.5 * (np.cos(2. * np.pi * x[0]) + np.cos(2. * np.pi * x[1]))
+    ...     return -20. * np.exp(arg1) - np.exp(arg2) + 20. + np.e
     >>> result = biteopt(ackley, bounds)
     >>> result.x, result.fun
     array([0., 0.]), 0.0
+
     '''
     lower_bounds = [bound[0] for bound in bounds]
     upper_bounds = [bound[1] for bound in bounds]
