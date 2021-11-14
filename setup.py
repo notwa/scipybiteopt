@@ -24,7 +24,7 @@ module1 = Extension('scipybiteopt.biteopt',
                   sources=get_c_sources(['scipybiteopt/biteopt_py_ext.cpp'], include_headers=(sys.argv[1] == "sdist")),
                   language="c++",
                   include_dirs=[numpy.get_include()],
-                  extra_compile_args=['-std=c++11'] if os.name != 'nt' else [])
+                  extra_compile_args=['-std=c++11 -O3'] if os.name != 'nt' else ['-O3'])
 
 setup(name='scipybiteopt',
     version='1.0.1',
