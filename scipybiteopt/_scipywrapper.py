@@ -1,4 +1,5 @@
 from .biteopt import _minimize
+import numpy as np
 
 __source_version__ = "2021.28"
 __source_hash__ = "8ff656353f42df9e97d62d660c7b76a60ce5cd9b"
@@ -35,6 +36,10 @@ class OptimizeResult(dict):
 def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, callback = None):
     '''
     Global optimization via the biteopt algorithm
+
+    .. note::
+        biteopt does not handle Python Exceptions and will not exit gracefully in case of errors. 
+        Take care that your objective function always returns a double.
 
     Parameters
     ----------
