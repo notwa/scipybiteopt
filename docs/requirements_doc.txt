@@ -1,4 +1,3 @@
-scipybiteopt
 numpy
 nbsphinx
 ipython
