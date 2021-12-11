@@ -1,0 +1,5 @@
+scipybiteopt
+numpy
+nbsphinx
+ipython
+jupyter_sphinx

@@ -37,13 +37,13 @@ Example: Minimizing the six-hump camel back function
    print("Found optimum: ", res.x)
 
 Documentation
------
+-----------------
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
    scipybiteopt
-
+   Benchmark
 
 Indices and tables
 ==================
