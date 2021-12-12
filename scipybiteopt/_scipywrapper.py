@@ -39,7 +39,8 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, callba
 
     .. note::
         biteopt does not handle Python Exceptions and will not exit gracefully in case of errors. 
-        Take care that your objective function always returns a double.
+        Take care that your objective function always returns a double. Also note that biteopt 
+        always runs for the maximal number of function evaluations: `iters * attempts * sqrt(depth)`.
 
     Parameters
     ----------
