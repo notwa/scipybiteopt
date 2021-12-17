@@ -26,6 +26,13 @@ res = scipybiteopt.biteopt(camel, bounds)
 print("Found optimum: ", res.x)
 ```
 
+## Biteopt version ##
+The underlying biteopt version can be found via
+```python
+import scipybiteopt
+scipybiteopt.__source_version__
+```
+
 ## Citing ##
 ```bibtex
 @misc{biteopt2021,
