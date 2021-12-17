@@ -61,10 +61,10 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, tol = 
     attempts : int, optional, default 10
         Number of individual optimization attemps
     tol : string, optional, default "strong"
-        Convergence criterion. Must be one of "hard", "weak", or None.
+        Convergence criterion. Must be one of ``hard``, ``weak``, or None.
         Stops optimization if no significant decrease of the objective function was achieved within 
-        a certain number of iterations: 64*n_dim for `hard`, 128*n_dim for `weak`. If `None`, optimization 
-        will run for the maximal number of function evaluations `iter ` per attempt.
+        a certain number of iterations: 64*n_dim for ``hard``, 128*n_dim for ``weak``. If ``None``, optimization 
+        will run for the maximal number of function evaluations ``iter`` per attempt.
     callback : callable, optional, default None
         callback function which is also called before every objective function evaluation. 
         Must be in the form ``fun(x, *args)``, where ``x`` 
