@@ -36,6 +36,15 @@ Example: Minimizing the six-hump camel back function
    res = scipybiteopt.biteopt(camel, bounds)
    print("Found optimum: ", res.x)
 
+Which biteopt version is used?
+------------
+The underyling biteopt version can be accessed via
+
+.. code-block:: python
+
+   import scipybiteopt
+   scipybiteopt.__source_version__
+
 Documentation
 -----------------
 .. toctree::
