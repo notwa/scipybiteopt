@@ -1,4 +1,4 @@
-from ._scipywrapper import biteopt, OptimizeResult, __source_version__, __source_hash__
+from ._scipywrapper import biteopt, OptimizeResult, __source_version__
 
 __all__ = ["biteopt",
         "OptimizeResult",
