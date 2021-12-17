@@ -32,7 +32,7 @@ class OptimizeResult(dict):
         else:
             return self.__class__.__name__ + "()"
 
-def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, tol = "hard", callback = None):
+def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, tol = 'hard', callback = None):
     '''
     Global optimization via the biteopt algorithm
 
@@ -61,7 +61,7 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, tol = 
     attempts : int, optional, default 10
         Number of individual optimization attemps
     tol : string, optional, default "strong"
-        Convergence criterion. Must be one of ``hard``, ``weak``, or None.
+        Convergence criterion. Must be one of ``hard``, ``weak``, or ``None``.
         Stops optimization if no significant decrease of the objective function was achieved within 
         a certain number of iterations: 64*n_dim for ``hard``, 128*n_dim for ``weak``. If ``None``, optimization 
         will run for the maximal number of function evaluations ``iter`` per attempt.
@@ -76,7 +76,7 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, tol = 
     result : :py:class:`~OptimizeResult`
         The optimization result represented as a :py:class:`~OptimizeResult` object.
         Attributes are: ``x`` the solution array, ``fun`` the value
-        of the function at the solution, andthe number of function evaluations``nfev``.
+        of the function at the solution, and the number of function evaluations ``nfev``.
 
     Example
     --------
@@ -94,18 +94,45 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, tol = 
     array([0., 0.]), 0.0
 
     '''
-    lower_bounds = [bound[0] for bound in bounds]
-    upper_bounds = [bound[1] for bound in bounds]
+
+    #get lower and upper bounds
+    if isinstance(bounds, list):
+
+        lower_bounds = [bound[0] for bound in bounds]
+        upper_bounds = [bound[1] for bound in bounds]
+    
+    else:
+        raise ValueError("'bounds' must be of type list.")
 
     if tol not in ["hard", "weak", None]:
         raise ValueError("tol must be one of 'hard', 'weak', None.")
-
     elif tol == "hard":
         tol_c = 1
     elif tol == "weak":
         tol_c = 2
     else: 
         tol_c = 0
+
+    #further input validation
+    if not isinstance(iters, int):
+        raise ValueError("'iters' must be of type integer.")
+    if iters < 1:
+        raise ValueError("'iters' must be >=1.")
+
+    if not isinstance(attempts, int):
+        raise ValueError("'attempts' must be of type integer.")
+    if attempts < 1:
+        raise ValueError("'attempts' must be >=1.")
+
+    if not isinstance(depth, int):
+        raise ValueError("'attempts' must be of type integer.")
+    if depth < 1 or depth > 36:
+        raise ValueError("'depth' must be between 1 and 36.")
+    
+    if not isinstance(args, tuple):
+        raise ValueError("'args' must be between of type list.")
+
+    #generate wrapper function which passes args to the objective
 
     if callback is not None:
 
@@ -122,7 +149,6 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, tol = 
     
     f, x_opt, n_eval = _minimize(wrapped_fun, lower_bounds, upper_bounds, iters, depth, attempts, tol_c)
 
-    #nfev = int(iters * depth**0.5 * attempts)
     result = OptimizeResult(x=x_opt, fun = f, nfev=n_eval)
     
     return result
