@@ -32,7 +32,7 @@ class OptimizeResult(dict):
         else:
             return self.__class__.__name__ + "()"
 
-def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, tol = 'hard', callback = None):
+def biteopt(fun, bounds, args=(), iters = 20000, depth = 1, attempts = 1, tol = 'hard', callback = None):
     '''
     Global optimization via the biteopt algorithm
 
@@ -60,7 +60,7 @@ def biteopt(fun, bounds, args=(), iters = 1000, depth = 1, attempts = 10, tol = 
         Setting depth to a higher value increases the chance for convergence for high-dimensional problems.
     attempts : int, optional, default 10
         Number of individual optimization attemps
-    tol : string, optional, default "strong"
+    tol : string, optional, default ``hard``
         Convergence criterion. Must be one of ``hard``, ``weak``, or ``None``.
         Stops optimization if no significant decrease of the objective function was achieved within 
         a certain number of iterations: 64*n_dim for ``hard``, 128*n_dim for ``weak``. If ``None``, optimization 
