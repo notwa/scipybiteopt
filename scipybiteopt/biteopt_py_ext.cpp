@@ -9,8 +9,19 @@
 
 extern "C" {
 
-static void biteoptCleanup(PyObject *capsule) {
+static void free_by_capsule(PyObject *capsule) {
+    // free the pointer associated with the capsule.
+    // the NULL argument could instead be a string,
+    // but only one datum is necessary, so no name is required.
     free(PyCapsule_GetPointer(capsule, NULL));
+}
+
+static void free_with_array(PyArrayObject *arr, void *data) {
+    // when the array's reference counter hits zero (well,
+    // technically the capsule's), and garbage collection occurs,
+    // run the deconstructor for the capsule associated with the array.
+    PyObject *capsule = PyCapsule_New(data, NULL, free_by_capsule);
+    PyArray_SetBaseObject(arr, capsule); // "steals" the reference
 }
 
 static PyObject* minimize_func(PyObject* self, PyObject* args, PyObject *kwargs)
@@ -78,7 +89,7 @@ static PyObject* minimize_func(PyObject* self, PyObject* args, PyObject *kwargs)
             return 0;
         }
     }
-    double* best_x = (double*) calloc(lower.size(), sizeof(double));
+    double* best_x = reinterpret_cast<double*>(calloc(lower.size(), sizeof(double)));
     double min_f;
     int n_fev;
 
@@ -89,19 +100,13 @@ static PyObject* minimize_func(PyObject* self, PyObject* args, PyObject *kwargs)
     };
 
     auto closure = [](int N, const double* x, void* func_data ) {
-        // auto list = PyList_New(0);
-        // for(auto i=0; i < N; ++i){
-        //     PyList_Append(list, PyFloat_FromDouble(x[i]));
-        // }
-
         npy_intp dims[1];
         dims[0] = N;
         PyObject *arr = PyArray_SimpleNewFromData(1, dims,NPY_DOUBLE, (void *)x);
-        PyArray_ENABLEFLAGS((PyArrayObject*) arr, NPY_ARRAY_OWNDATA);
         auto func_f = static_cast<FuncData*>(func_data);
-        return PyFloat_AsDouble( PyObject_CallFunctionObjArgs(func_f->func, arr,NULL));
-
-
+        double fun = PyFloat_AsDouble( PyObject_CallFunctionObjArgs(func_f->func, arr,NULL));
+        Py_DECREF(arr);
+        return fun;
     };
 
     FuncData fdata = {func_py}; // maybe add pass-thru args later
@@ -114,10 +119,9 @@ static PyObject* minimize_func(PyObject* self, PyObject* args, PyObject *kwargs)
     dims_res[0] = dimensions;
 
     PyObject *res = PyArray_SimpleNewFromData(1, dims_res,NPY_DOUBLE,(void *)best_x);
-    PyObject *capsule = PyCapsule_New(best_x, NULL, biteoptCleanup);
-    PyArray_SetBaseObject((PyArrayObject*) res, capsule);
+    free_with_array(reinterpret_cast<PyArrayObject*>(res), static_cast<void*>(best_x));
     PyObject *result = PyTuple_Pack(3, fun, res, nfev);
-    Py_DECREF(res);
+    Py_DECREF(res); // tuple keeps reference to array; drop original reference
     return result;
 }
 
