@@ -9,6 +9,10 @@
 
 extern "C" {
 
+static void biteoptCleanup(PyObject *capsule) {
+    free(PyCapsule_GetPointer(capsule, NULL));
+}
+
 static PyObject* minimize_func(PyObject* self, PyObject* args, PyObject *kwargs)
 {
     std::vector<double> upper, lower;
@@ -74,7 +78,7 @@ static PyObject* minimize_func(PyObject* self, PyObject* args, PyObject *kwargs)
             return 0;
         }
     }
-    std::vector<double> best_x(lower.size());
+    double* best_x = (double*) calloc(lower.size(), sizeof(double));
     double min_f;
     int n_fev;
    
@@ -101,7 +105,7 @@ static PyObject* minimize_func(PyObject* self, PyObject* args, PyObject *kwargs)
     };
 
     FuncData fdata = {func_py}; // maybe add pass-thru args later
-    n_fev = biteopt_minimize( lower.size(), closure, (void*)&fdata, lower.data(), upper.data(), best_x.data(), &min_f, iter_py,M_py,attc_py, stopc_py);
+    n_fev = biteopt_minimize( lower.size(), closure, (void*)&fdata, lower.data(), upper.data(), best_x, &min_f, iter_py,M_py,attc_py, stopc_py);
 
     PyObject *fun = PyFloat_FromDouble(min_f);
     PyObject *nfev = PyLong_FromLong(n_fev);
@@ -109,10 +113,11 @@ static PyObject* minimize_func(PyObject* self, PyObject* args, PyObject *kwargs)
     int dimensions = lower.size();
     dims_res[0] = dimensions;
 
-    PyObject *res = PyArray_SimpleNewFromData(1, dims_res,NPY_DOUBLE,(void *)best_x.data());
-    PyArray_ENABLEFLAGS((PyArrayObject*) res, NPY_ARRAY_OWNDATA);
+    PyObject *res = PyArray_SimpleNewFromData(1, dims_res,NPY_DOUBLE,(void *)best_x);
+    PyObject *capsule = PyCapsule_New(best_x, NULL, biteoptCleanup);
+    PyArray_SetBaseObject((PyArrayObject*) res, capsule);
     PyObject *result = PyTuple_Pack(3, fun, res, nfev);
-    //Py_DECREF(fun);  
+    Py_DECREF(res);
     return result;
 }
 
