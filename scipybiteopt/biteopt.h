@@ -26,12 +26,12 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- *
- * @version 2022.2
  */
 
 #ifndef BITEOPT_INCLUDED
 #define BITEOPT_INCLUDED
+
+#define BITEOPT_VERSION "2022.8"
 
 #include "spheropt.h"
 #include "nmsopt.h"
@@ -60,14 +60,12 @@ public:
 		addHist( M1BHist, "M1BHist" );
 		addHist( M1BAHist, "M1BAHist" );
 		addHist( M1BBHist, "M1BBHist" );
-		addHist( PopChangeHist, "PopChangeHist" );
+		addHist( PopChangeIncrHist, "PopChangeIncrHist" );
+		addHist( PopChangeDecrHist, "PopChangeDecrHist" );
 		addHist( ParOpt2Hist, "ParOpt2Hist" );
 		addHist( ParPopPHist[ 0 ], "ParPopPHist[ 0 ]" );
 		addHist( ParPopPHist[ 1 ], "ParPopPHist[ 1 ]" );
 		addHist( ParPopPHist[ 2 ], "ParPopPHist[ 2 ]" );
-		addHist( ParPopHist[ 0 ], "ParPopHist[ 0 ]" );
-		addHist( ParPopHist[ 1 ], "ParPopHist[ 1 ]" );
-		addHist( ParPopHist[ 2 ], "ParPopHist[ 2 ]" );
 		addHist( AltPopPHist, "AltPopPHist" );
 		addHist( AltPopHist[ 0 ], "AltPopHist[ 0 ]" );
 		addHist( AltPopHist[ 1 ], "AltPopHist[ 1 ]" );
@@ -84,6 +82,7 @@ public:
 		addHist( Gen1MoveSpanHist, "Gen1MoveSpanHist" );
 		addHist( Gen4MixFacHist, "Gen4MixFacHist" );
 		addHist( Gen5BinvHist, "Gen5BinvHist" );
+		addHist( Gen7PowFacHist, "Gen7PowFacHist" );
 		addHist( *ParOpt.getHists()[ 0 ], "ParOpt.CentPowHist" );
 		addHist( *ParOpt.getHists()[ 1 ], "ParOpt.RadPowHist" );
 		addHist( *ParOpt.getHists()[ 2 ], "ParOpt.EvalFacHist" );
@@ -118,6 +117,8 @@ public:
 		ParOpt2.Owner = this;
 		ParOpt2.updateDims( aParamCount );
 		ParOpt2Pop.initBuffers( aParamCount, aPopSize );
+
+		OldPop.initBuffers( aParamCount, aPopSize );
 	}
 
 	/**
@@ -193,6 +194,7 @@ public:
 
 		ParOptPop.resetCurPopPos();
 		ParOpt2Pop.resetCurPopPos();
+		OldPop.resetCurPopPos();
 
 		DoInitEvals = true;
 	}
@@ -281,7 +283,7 @@ public:
 					}
 					else
 					{
-						generateSol4b( rnd );
+						generateSol7( rnd );
 					}
 				}
 				else
@@ -391,7 +393,7 @@ public:
 
 			if( CurPopSize < PopSize )
 			{
-				if( select( PopChangeHist, rnd ) == 0 )
+				if( select( PopChangeIncrHist, rnd ))
 				{
 					// Increase population size on fail.
 
@@ -413,10 +415,16 @@ public:
 				StallCount = 0;
 			}
 
+			if( rnd.getRndValue() < 1.0 / ParamCount )
+			{
+				OldPop.updatePop( PopCosts[ CurPopSize1 ],
+					PopParams[ CurPopSize1 ], false, true );
+			}
+
 			updatePop( NewCost, TmpParams, false, false );
 
 			if( PushOpt != NULL && PushOpt != this &&
-				!PushOpt -> DoInitEvals )
+				!PushOpt -> DoInitEvals && NewCost > PopCosts[ 0 ])
 			{
 				PushOpt -> updatePop( NewCost, TmpParams, false, true );
 				PushOpt -> updateParPop( NewCost, TmpParams );
@@ -424,7 +432,7 @@ public:
 
 			if( CurPopSize > PopSize / 2 )
 			{
-				if( select( PopChangeHist, rnd ) == 1 )
+				if( select( PopChangeDecrHist, rnd ))
 				{
 					// Decrease population size on success.
 
@@ -473,7 +481,10 @@ protected:
 		///<
 	CBiteOptHist< 2 > M1BBHist; ///< Method 1's sub-sub-method B2 histogram.
 		///<
-	CBiteOptHist< 2 > PopChangeHist; ///< Population size change
+	CBiteOptHist< 2 > PopChangeIncrHist; ///< Population size change increase
+		///< histogram.
+		///<
+	CBiteOptHist< 2 > PopChangeDecrHist; ///< Population size change decrease
 		///< histogram.
 		///<
 	CBiteOptHist< 2 > ParOpt2Hist; ///< Parallel optimizer 2 use
@@ -481,10 +492,6 @@ protected:
 		///<
 	CBiteOptHist< 2 > ParPopPHist[ 3 ]; ///< Parallel population use
 		///< probability histogram.
-		///<
-	CBiteOptHist< 4 > ParPopHist[ 3 ]; ///< Parallel population
-		///< histograms for solution generators (template's Count parameter
-		///< should match ParPopCount).
 		///<
 	CBiteOptHist< 2 > AltPopPHist; ///< Alternative population use
 		///< histogram.
@@ -503,7 +510,7 @@ protected:
 		///<
 	CBiteOptHist< 2 > Gen1MoveHist; ///< Generator method 1's Move
 		///< histogram.
-		////<
+		///<
 	CBiteOptHist< 2 > Gen1MoveAsyncHist; ///< Generator method 1's Move
 		///< async histogram.
 		///<
@@ -516,9 +523,15 @@ protected:
 	CBiteOptHist< 2 > Gen5BinvHist; ///< Generator method 5's random
 		///< inversion technique histogram.
 		///<
+	CBiteOptHist< 4 > Gen7PowFacHist; ///< Generator method 2c's Power
+		///< histogram.
+		///<
 	int CentUpdateCtr; ///< Centroid update counter.
 		///<
 	bool DoInitEvals; ///< "True" if initial evaluations should be performed.
+		///<
+	CBiteOptPop OldPop; ///< Population of older solutions, updated
+		///< probabilistically.
 		///<
 
 	/**
@@ -590,7 +603,7 @@ protected:
 	{
 		if( select( ParPopPHist[ gi ], rnd ))
 		{
-			return( *ParPops[ select( ParPopHist[ gi ], rnd )]);
+			return( *ParPops[ (int) ( rnd.getRndValue() * ParPopCount )]);
 		}
 
 		return( *this );
@@ -738,7 +751,7 @@ protected:
 	}
 
 	/**
-	 * The "Digital Evolution"-based solution generator.
+	 * The "Differential Evolution"-based solution generator.
 	 */
 
 	void generateSol2( CBiteRnd& rnd )
@@ -771,7 +784,7 @@ protected:
 	}
 
 	/**
-	 * An alternative "Digital Evolution"-based solution generator.
+	 * An alternative "Differential Evolution"-based solution generator.
 	 */
 
 	void generateSol2b( CBiteRnd& rnd )
@@ -881,43 +894,6 @@ protected:
 	}
 
 	/**
-	 * Solution generator similar to generateSol4, but uses solutions from the
-	 * main population only, and includes "crossover" approach first
-	 * implemented in the generateSol5b() function.
-	 */
-
-	void generateSol4b( CBiteRnd& rnd )
-	{
-		ptype* const Params = TmpParams;
-
-		const int km = 3 + ( select( Gen4MixFacHist, rnd ) << 1 );
-
-		int si1 = (int) ( rnd.getRndValueSqr() * CurPopSize );
-		const ptype* rp1 = getParamsOrdered( si1 );
-
-		memcpy( Params, rp1, ParamCount * sizeof( Params[ 0 ]));
-
-		int k;
-
-		for( k = 1; k < km; k++ )
-		{
-			si1 = (int) ( rnd.getRndValueSqr() * CurPopSize );
-			int si2 = (int) ( rnd.getRndValueSqr() * CurPopSize );
-
-			const ptype* CrossParams[ 2 ];
-			CrossParams[ 0 ] = getParamsOrdered( si1 );
-			CrossParams[ 1 ] = getParamsOrdered( si2 );
-
-			int i;
-
-			for( i = 0; i < ParamCount; i++ )
-			{
-				Params[ i ] ^= CrossParams[ rnd.getBit()][ i ];
-			}
-		}
-	}
-
-	/**
 	 * A novel "Randomized bit crossing-over" candidate solution generation
 	 * method. Effective, but on its own cannot stand coordinate system
 	 * offsets, converges slowly. Completely mixes bits of two
@@ -1021,6 +997,39 @@ protected:
 		for( i = 0; i < ParamCount; i++ )
 		{
 			Params[ i ] = (ptype) (( v - MinValues[ i ]) * DiffValuesI[ i ]);
+		}
+	}
+
+	/**
+	 * A solution generator that randomly combines solutions from the main
+	 * and "old" populations. Conceptually, it can be called a
+	 * weighted-random crossover that combines solutions from diverse
+	 * sources.
+	 */
+
+	void generateSol7( CBiteRnd& rnd )
+	{
+		ptype* const Params = TmpParams;
+
+		const bool UseOldPop = ( OldPop.getCurPopPos() > 2 );
+		static const double p[ 4 ] = { 1.0, 1.5, 2.0, 2.5 };
+		const double pwr = p[ select( Gen7PowFacHist, rnd )];
+		int i;
+
+		for( i = 0; i < ParamCount; i++ )
+		{
+			const double rv = pow( rnd.getRndValue(), pwr );
+
+			if( UseOldPop && rnd.getBit() )
+			{
+				Params[ i ] = OldPop.getParamsOrdered(
+					(int) ( rv * OldPop.getCurPopPos() ))[ i ];
+			}
+			else
+			{
+				Params[ i ] = getParamsOrdered(
+					(int) ( rv * CurPopSize ))[ i ];
+			}
 		}
 	}
 };
@@ -1276,8 +1285,7 @@ protected:
  * Objective function.
  */
 
-typedef double (*biteopt_func)( int N, const double* x,
-	void* func_data );
+typedef double( *biteopt_func )( int N, const double* x, void* func_data );
 
 /**
  * Wrapper class for the biteopt_minimize() function.
@@ -1314,7 +1322,7 @@ public:
 
 	virtual double optcost( const double* const p )
 	{
-		return( (*f)( N, p, data ));
+		return(( *f )( N, p, data ));
 	}
 };
 
@@ -1337,6 +1345,9 @@ public:
  * @param attc The number of optimization attempts to perform.
  * @param stopc Stopping criteria (convergence check). 0: off, 1: 64*N,
  * 2: 128*N.
+ * @param rf Random number generator function; 0: use the default BiteOpt
+ * PRNG. Note that the external RNG should be seeded externally.
+ * @param rdata Data pointer to pass to the "rf" function.
  * @return The total number of function evaluations performed; useful if the
  * "stopc" was used.
  */
@@ -1344,7 +1355,7 @@ public:
 inline int biteopt_minimize( const int N, biteopt_func f, void* data,
 	const double* lb, const double* ub, double* x, double* minf,
 	const int iter, const int M = 1, const int attc = 10,
-	const int stopc = 0 )
+	const int stopc = 0, biteopt_rng rf = 0, void* rdata = 0 )
 {
 	CBiteOptMinimize opt;
 	opt.N = N;
@@ -1355,7 +1366,7 @@ inline int biteopt_minimize( const int N, biteopt_func f, void* data,
 	opt.updateDims( N, M );
 
 	CBiteRnd rnd;
-	rnd.init( 1 );
+	rnd.init( 1, rf, rdata );
 
 	const int sct = ( stopc <= 0 ? 0 : 64 * N * stopc );
 	const int useiter = (int) ( iter * sqrt( (double) M ));
