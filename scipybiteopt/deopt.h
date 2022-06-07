@@ -7,7 +7,7 @@
  *
  * @section license License
  *
- * Copyright (c) 2021 Aleksey Vaneev
+ * Copyright (c) 2021-2022 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 2021.28
+ * @version 2022.14
  */
 
 #ifndef DEOPT_INCLUDED
@@ -58,7 +58,7 @@ public:
 
 	void updateDims( const int aParamCount, const int PopSize0 = 0 )
 	{
-		const int aPopSize = ( PopSize0 > 0 ? PopSize0 : 20 * aParamCount );
+		const int aPopSize = ( PopSize0 > 0 ? PopSize0 : 30 * aParamCount );
 
 		if( aParamCount == ParamCount && aPopSize == PopSize )
 		{
@@ -86,7 +86,7 @@ public:
 
 		resetCommonVars( rnd );
 
-		const double sd = 0.25 * InitRadius;
+		const double sd = 0.125 * InitRadius;
 		int i;
 		int j;
 
@@ -182,35 +182,46 @@ public:
 
 		memset( TmpParams, 0, ParamCount * sizeof( TmpParams[ 0 ]));
 
-		const int si1 = (int) ( rnd.getRndValueSqr() * CurPopSize );
+		const double r1 = rnd.getSqr();
+		const int si1 = (int) ( r1 * r1 * CurPopSize );
 		const ptype* const rp1 = getParamsOrdered( si1 );
 
 		const int PairCount = 3;
-		int PopIdx[ 1 + 2 * PairCount ];
+		const int pc = 1 + 2 * PairCount;
+		int PopIdx[ pc ];
 		PopIdx[ 0 ] = si1;
 
 		int pp = 1;
 		int j;
 
-		while( pp < 1 + 2 * PairCount )
+		if( CurPopSize1 <= pc )
 		{
-			const int sii = (int) ( rnd.getRndValue() * CurPopSize );
-
-			for( j = 0; j < pp; j++ )
+			while( pp < pc )
 			{
-				if( PopIdx[ j ] == sii )
+				PopIdx[ pp ] = rnd.getInt( CurPopSize );
+				pp++;
+			}
+		}
+		else
+		{
+			while( pp < pc )
+			{
+				const int sii = rnd.getInt( CurPopSize );
+
+				for( j = 0; j < pp; j++ )
 				{
-					break;
+					if( PopIdx[ j ] == sii )
+					{
+						break;
+					}
+				}
+
+				if( j >= pp )
+				{
+					PopIdx[ pp ] = sii;
+					pp++;
 				}
 			}
-
-			if( j < pp )
-			{
-				continue;
-			}
-
-			PopIdx[ pp ] = sii;
-			pp++;
 		}
 
 		for( j = 0; j < PairCount; j++ )
@@ -224,18 +235,20 @@ public:
 			}
 		}
 
-		for( i = 0; i < ParamCount; i++ )
-		{
-			TmpParams[ i ] = rp1[ i ] + ( TmpParams[ i ] >> 2 );
-		}
+		// TPDF bit randomization.
 
 		if( rnd.getBit() )
 		{
-			const int j = (int) ( rnd.getRndValue() * ParamCount );
-			const int b = (int) ( rnd.getRndValue() * IntMantBits );
+			const int k = rnd.getInt( ParamCount );
+			const int b = rnd.getInt( IntMantBits );
 
-			TmpParams[ j ] &= ~( (ptype) 1 << b );
-			TmpParams[ j ] |= (ptype) rnd.getBit() << b;
+			TmpParams[ k ] += ( (ptype) rnd.getBit() << b ) -
+				( (ptype) rnd.getBit() << b );
+		}
+
+		for( i = 0; i < ParamCount; i++ )
+		{
+			TmpParams[ i ] = rp1[ i ] + ( TmpParams[ i ] >> 2 );
 		}
 
 		for( i = 0; i < ParamCount; i++ )

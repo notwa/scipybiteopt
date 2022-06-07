@@ -31,7 +31,7 @@
 #ifndef BITEOPT_INCLUDED
 #define BITEOPT_INCLUDED
 
-#define BITEOPT_VERSION "2022.8"
+#define BITEOPT_VERSION "2022.16"
 
 #include "spheropt.h"
 #include "nmsopt.h"
@@ -60,32 +60,36 @@ public:
 		addHist( M1BHist, "M1BHist" );
 		addHist( M1BAHist, "M1BAHist" );
 		addHist( M1BBHist, "M1BBHist" );
+		addHist( M2Hist, "M2Hist" );
+		addHist( M2BHist, "M2BHist" );
 		addHist( PopChangeIncrHist, "PopChangeIncrHist" );
 		addHist( PopChangeDecrHist, "PopChangeDecrHist" );
 		addHist( ParOpt2Hist, "ParOpt2Hist" );
 		addHist( ParPopPHist[ 0 ], "ParPopPHist[ 0 ]" );
 		addHist( ParPopPHist[ 1 ], "ParPopPHist[ 1 ]" );
 		addHist( ParPopPHist[ 2 ], "ParPopPHist[ 2 ]" );
+		addHist( ParPopPHist[ 3 ], "ParPopPHist[ 3 ]" );
 		addHist( AltPopPHist, "AltPopPHist" );
 		addHist( AltPopHist[ 0 ], "AltPopHist[ 0 ]" );
 		addHist( AltPopHist[ 1 ], "AltPopHist[ 1 ]" );
 		addHist( AltPopHist[ 2 ], "AltPopHist[ 2 ]" );
+		addHist( AltPopHist[ 3 ], "AltPopHist[ 3 ]" );
 		addHist( MinSolPwrHist[ 0 ], "MinSolPwrHist[ 0 ]" );
 		addHist( MinSolPwrHist[ 1 ], "MinSolPwrHist[ 1 ]" );
 		addHist( MinSolPwrHist[ 2 ], "MinSolPwrHist[ 2 ]" );
+		addHist( MinSolPwrHist[ 3 ], "MinSolPwrHist[ 3 ]" );
 		addHist( MinSolMulHist[ 0 ], "MinSolMulHist[ 0 ]" );
 		addHist( MinSolMulHist[ 1 ], "MinSolMulHist[ 1 ]" );
 		addHist( MinSolMulHist[ 2 ], "MinSolMulHist[ 2 ]" );
+		addHist( MinSolMulHist[ 3 ], "MinSolMulHist[ 3 ]" );
 		addHist( Gen1AllpHist, "Gen1AllpHist" );
 		addHist( Gen1MoveHist, "Gen1MoveHist" );
 		addHist( Gen1MoveAsyncHist, "Gen1MoveAsyncHist" );
 		addHist( Gen1MoveSpanHist, "Gen1MoveSpanHist" );
 		addHist( Gen4MixFacHist, "Gen4MixFacHist" );
-		addHist( Gen5BinvHist, "Gen5BinvHist" );
 		addHist( Gen7PowFacHist, "Gen7PowFacHist" );
-		addHist( *ParOpt.getHists()[ 0 ], "ParOpt.CentPowHist" );
-		addHist( *ParOpt.getHists()[ 1 ], "ParOpt.RadPowHist" );
-		addHist( *ParOpt.getHists()[ 2 ], "ParOpt.EvalFacHist" );
+		addHist( Gen8NumHist, "Gen8NumHist" );
+		addHist( Gen8SpanHist, "Gen8SpanHist" );
 	}
 
 	/**
@@ -101,7 +105,7 @@ public:
 	void updateDims( const int aParamCount, const int PopSize0 = 0 )
 	{
 		const int aPopSize = ( PopSize0 > 0 ? PopSize0 :
-			13 + aParamCount * 3 );
+			10 + aParamCount * 3 );
 
 		if( aParamCount == ParamCount && aPopSize == PopSize )
 		{
@@ -111,11 +115,11 @@ public:
 		initBuffers( aParamCount, aPopSize );
 
 		ParOpt.Owner = this;
-		ParOpt.updateDims( aParamCount );
+		ParOpt.updateDims( aParamCount, 11 + aPopSize / 3 );
 		ParOptPop.initBuffers( aParamCount, aPopSize );
 
 		ParOpt2.Owner = this;
-		ParOpt2.updateDims( aParamCount );
+		ParOpt2.updateDims( aParamCount, aPopSize * 4 / 3 );
 		ParOpt2Pop.initBuffers( aParamCount, aPopSize );
 
 		OldPop.initBuffers( aParamCount, aPopSize );
@@ -185,7 +189,7 @@ public:
 
 		updateCentroid();
 
-		AllpProbDamp = 1.8 / ParamCount;
+		AllpProbDamp = 1.8 * ParamCountI;
 		CentUpdateCtr = 0;
 
 		ParOpt.init( rnd, InitParams, InitRadius );
@@ -208,7 +212,7 @@ public:
 	 * "pushed", used for deep optimization algorithm.
 	 * @return The number of non-improving iterations so far. A high value
 	 * means optimizer has reached an optimization plateau. The suggested
-	 * threshold value is ParamCount * 64. When this value was reached, the
+	 * threshold value is ParamCount * 128. When this value was reached, the
 	 * probability of plateau is high. This value, however, should not be
 	 * solely relied upon when considering a stopping criteria: a hard
 	 * iteration limit should be always used as in some cases convergence time
@@ -264,11 +268,11 @@ public:
 			{
 				if( select( M1AHist, rnd ))
 				{
-					generateSol2b( rnd );
+					generateSol2c( rnd );
 				}
 				else
 				{
-					generateSol3( rnd );
+					generateSol2b( rnd );
 				}
 			}
 			else
@@ -283,7 +287,7 @@ public:
 					}
 					else
 					{
-						generateSol7( rnd );
+						generateSol5b( rnd );
 					}
 				}
 				else
@@ -295,7 +299,7 @@ public:
 					}
 					else
 					{
-						generateSol5b( rnd );
+						generateSol7( rnd );
 					}
 				}
 				else
@@ -307,7 +311,21 @@ public:
 		else
 		if( SelMethod == 2 )
 		{
-			generateSol1( rnd );
+			if( select( M2Hist, rnd ))
+			{
+				generateSol1( rnd );
+			}
+			else
+			{
+				if( select( M2BHist, rnd ))
+				{
+					generateSol3( rnd );
+				}
+				else
+				{
+					generateSol8( rnd );
+				}
+			}
 		}
 		else
 		{
@@ -333,7 +351,7 @@ public:
 
 				if( sc > ParamCount * 64 )
 				{
-					ParOpt.init( rnd, getBestParams() );
+					ParOpt.init( rnd, ParOpt.getBestParams(), 0.5 );
 					ParOptPop.resetCurPopPos();
 				}
 
@@ -350,7 +368,7 @@ public:
 
 				if( sc > ParamCount * 16 )
 				{
-					ParOpt2.init( rnd, getBestParams(), -1.0 );
+					ParOpt2.init( rnd, ParOpt2.getBestParams(), 1.0 );
 					ParOpt2Pop.resetCurPopPos();
 				}
 
@@ -398,14 +416,12 @@ public:
 					// Increase population size on fail.
 
 					incrCurPopSize( CurPopSize1 -
-						(int) ( rnd.getRndValueSqr() * CurPopSize ));
+						rnd.getSqrInt( CurPopSize ));
 				}
 			}
 		}
 		else
 		{
-			applyHistsIncr( rnd );
-
 			if( NewCost == PopCosts[ CurPopSize1 ])
 			{
 				StallCount++;
@@ -415,18 +431,19 @@ public:
 				StallCount = 0;
 			}
 
-			if( rnd.getRndValue() < 1.0 / ParamCount )
+			if( rnd.get() < ParamCountI )
 			{
 				OldPop.updatePop( PopCosts[ CurPopSize1 ],
 					PopParams[ CurPopSize1 ], false, true );
 			}
 
-			updatePop( NewCost, TmpParams, false, false );
+			const int p = updatePop( NewCost, TmpParams, true, false );
+			applyHistsIncr( rnd, 1.0 - p * CurPopSizeI );
 
 			if( PushOpt != NULL && PushOpt != this &&
 				!PushOpt -> DoInitEvals && NewCost > PopCosts[ 0 ])
 			{
-				PushOpt -> updatePop( NewCost, TmpParams, false, true );
+				PushOpt -> updatePop( NewCost, TmpParams, true, true );
 				PushOpt -> updateParPop( NewCost, TmpParams );
 			}
 
@@ -447,12 +464,14 @@ public:
 
 		CentUpdateCtr++;
 
-		if( CentUpdateCtr >= CurPopSize * 32 )
+		if( CentUpdateCtr >= CurPopSize * 8 )
 		{
-			// Update centroids of parallel populations that use running
-			// average, to reduce error accumulation.
+			// Update centroids of populations that use running average, to
+			// reduce error accumulation.
 
 			CentUpdateCtr = 0;
+
+			updateCentroid();
 
 			for( i = 0; i < ParPopCount; i++ )
 			{
@@ -481,6 +500,10 @@ protected:
 		///<
 	CBiteOptHist< 2 > M1BBHist; ///< Method 1's sub-sub-method B2 histogram.
 		///<
+	CBiteOptHist< 2 > M2Hist; ///< Method 2's sub-method histogram.
+		///<
+	CBiteOptHist< 2 > M2BHist; ///< Method 2's sub-sub-method B histogram.
+		///<
 	CBiteOptHist< 2 > PopChangeIncrHist; ///< Population size change increase
 		///< histogram.
 		///<
@@ -490,19 +513,19 @@ protected:
 	CBiteOptHist< 2 > ParOpt2Hist; ///< Parallel optimizer 2 use
 		///< histogram.
 		///<
-	CBiteOptHist< 2 > ParPopPHist[ 3 ]; ///< Parallel population use
+	CBiteOptHist< 2 > ParPopPHist[ 4 ]; ///< Parallel population use
 		///< probability histogram.
 		///<
 	CBiteOptHist< 2 > AltPopPHist; ///< Alternative population use
 		///< histogram.
 		///<
-	CBiteOptHist< 2 > AltPopHist[ 3 ]; ///< Alternative population type use
+	CBiteOptHist< 2 > AltPopHist[ 4 ]; ///< Alternative population type use
 		///< histogram.
 		///<
-	CBiteOptHist< 4 > MinSolPwrHist[ 3 ]; ///< Index of least-cost
+	CBiteOptHist< 4 > MinSolPwrHist[ 4 ]; ///< Index of least-cost
 		///< population, power factor.
 		///<
-	CBiteOptHist< 4 > MinSolMulHist[ 3 ]; ///< Index of least-cost
+	CBiteOptHist< 4 > MinSolMulHist[ 4 ]; ///< Index of least-cost
 		///< population, multiplier.
 		///<
 	CBiteOptHist< 2 > Gen1AllpHist; ///< Generator method 1's Allp
@@ -520,10 +543,13 @@ protected:
 	CBiteOptHist< 4 > Gen4MixFacHist; ///< Generator method 4's mixing
 		///< count histogram.
 		///<
-	CBiteOptHist< 2 > Gen5BinvHist; ///< Generator method 5's random
-		///< inversion technique histogram.
+	CBiteOptHist< 4 > Gen7PowFacHist; ///< Generator method 7's Power
+		///< histogram.
 		///<
-	CBiteOptHist< 4 > Gen7PowFacHist; ///< Generator method 2c's Power
+	CBiteOptHist< 4 > Gen8NumHist; ///< Generator method 8's NumSols
+		///< histogram.
+		///<
+	CBiteOptHist< 4 > Gen8SpanHist; ///< Generator method 8's random span
 		///< histogram.
 		///<
 	int CentUpdateCtr; ///< Centroid update counter.
@@ -595,7 +621,7 @@ protected:
 	 * With certain probability, *this object's own population will be
 	 * returned instead of parallel population.
 	 *
-	 * @param gi Solution generator index (0-2).
+	 * @param gi Solution generator index (0-3).
 	 * @param rnd PRNG object.
 	 */
 
@@ -603,7 +629,7 @@ protected:
 	{
 		if( select( ParPopPHist[ gi ], rnd ))
 		{
-			return( *ParPops[ (int) ( rnd.getRndValue() * ParPopCount )]);
+			return( *ParPops[ rnd.getInt( ParPopCount )]);
 		}
 
 		return( *this );
@@ -613,7 +639,7 @@ protected:
 	 * Function selects an alternative, parallel optimizer's, population, to
 	 * use in some solution generators.
 	 *
-	 * @param gi Solution generator index (0-2).
+	 * @param gi Solution generator index (0-3).
 	 * @param rnd PRNG object.
 	 */
 
@@ -644,7 +670,7 @@ protected:
 	 * Function returns a dynamically-selected minimal population index, used
 	 * in some solution generation methods.
 	 *
-	 * @param gi Solution generator index (0-2).
+	 * @param gi Solution generator index (0-3).
 	 * @param rnd PRNG object.
 	 * @param ps Population size.
 	 */
@@ -652,7 +678,7 @@ protected:
 	int getMinSolIndex( const int gi, CBiteRnd& rnd, const int ps )
 	{
 		static const double pp[ 4 ] = { 0.05, 0.125, 0.25, 0.5 };
-		const double r = ps * pow( rnd.getRndValue(),
+		const double r = ps * pow( rnd.get(),
 			ps * pp[ select( MinSolPwrHist[ gi ], rnd )]);
 
 		static const double rm[ 4 ] = { 0.0, 0.125, 0.25, 0.5 };
@@ -684,7 +710,7 @@ protected:
 		int b;
 		bool DoAllp = false;
 
-		if( rnd.getRndValue() < AllpProbDamp )
+		if( rnd.get() < AllpProbDamp )
 		{
 			if( select( Gen1AllpHist, rnd ))
 			{
@@ -699,19 +725,19 @@ protected:
 		}
 		else
 		{
-			a = (int) ( rnd.getRndValue() * ParamCount );
+			a = rnd.getInt( ParamCount );
 			b = a + 1;
 		}
 
 		// Bitmask inversion operation, works as the main "driver" of
 		// optimization process.
 
-		const double r1 = rnd.getRndValue();
+		const double r1 = rnd.get();
 		const double r12 = r1 * r1;
 		const int ims = (int) ( r12 * r12 * 48.0 );
 		const ptype imask = (ptype) ( IntMantMask >> ims );
 
-		const int im2s = (int) ( rnd.getRndValueSqr() * 96.0 );
+		const int im2s = rnd.getSqrInt( 96 );
 		const ptype imask2 = (ptype) ( im2s > 63 ? 0 : IntMantMask >> im2s );
 
 		const int si1 = (int) ( r1 * r12 * CurPopSize );
@@ -725,7 +751,7 @@ protected:
 
 		if( select( Gen1MoveHist, rnd ))
 		{
-			const int si2 = (int) ( rnd.getRndValueSqr() * CurPopSize );
+			const int si2 = rnd.getSqrInt( CurPopSize );
 			const ptype* const rp2 = getParamsOrdered( si2 );
 
 			if( select( Gen1MoveAsyncHist, rnd ))
@@ -744,8 +770,8 @@ protected:
 
 			for( i = a; i < b; i++ )
 			{
-				Params[ i ] -= (ptype) (( Params[ i ] - rp2[ i ]) * m1 );
-				Params[ i ] -= (ptype) (( Params[ i ] - rp2[ i ]) * m2 );
+				Params[ i ] += (ptype) (( rp2[ i ] - Params[ i ]) * m1 );
+				Params[ i ] += (ptype) (( rp2[ i ] - Params[ i ]) * m2 );
 			}
 		}
 	}
@@ -762,10 +788,10 @@ protected:
 		const ptype* const rp1 = getParamsOrdered( si1 );
 		const ptype* const rp3 = getParamsOrdered( CurPopSize1 - si1 );
 
-		const int si2 = 1 + (int) ( rnd.getRndValue() * CurPopSize1 );
+		const int si2 = 1 + rnd.getInt( CurPopSize1 );
 		const ptype* const rp2 = getParamsOrdered( si2 );
 
-		const int si4 = (int) ( rnd.getRndValueSqr() * CurPopSize );
+		const int si4 = rnd.getSqrInt( CurPopSize );
 		const ptype* const rp4 = getParamsOrdered( si4 );
 		const ptype* const rp5 = getParamsOrdered( CurPopSize1 - si4 );
 
@@ -778,8 +804,8 @@ protected:
 
 		for( i = 0; i < ParamCount; i++ )
 		{
-			Params[ i ] = rp1[ i ] - ((( rp3[ i ] - rp2[ i ]) +
-				( rp5[ i ] - rp4[ i ])) >> 1 );
+			Params[ i ] = rp1[ i ] + ((( rp2[ i ] - rp3[ i ]) +
+				( rp4[ i ] - rp5[ i ])) >> 1 );
 		}
 	}
 
@@ -793,16 +819,16 @@ protected:
 
 		// rand/2/none DE-alike mutation.
 
-		const int si1 = (int) ( rnd.getRndValue() * CurPopSize );
+		const int si1 = getMinSolIndex( 2, rnd, CurPopSize );
 		const ptype* const rp1 = getParamsOrdered( si1 );
 
-		const int si2 = (int) ( rnd.getRndValue() * CurPopSize );
+		const int si2 = rnd.getInt( CurPopSize );
 		const ptype* const rp2 = getParamsOrdered( si2 );
 		const ptype* const rp3 = getParamsOrdered( CurPopSize1 - si2 );
 
 		const CBiteOptPop& AltPop = selectAltPop( 0, rnd );
 
-		const int si4 = (int) ( rnd.getRndValue() * CurPopSize * 0.5 );
+		const int si4 = rnd.getInt( CurPopSize );
 		const ptype* const rp4 = AltPop.getParamsOrdered( si4 );
 		const ptype* const rp5 = AltPop.getParamsOrdered( CurPopSize1 - si4 );
 
@@ -810,8 +836,84 @@ protected:
 
 		for( i = 0; i < ParamCount; i++ )
 		{
-			Params[ i ] = rp1[ i ] - (( rp3[ i ] - rp2[ i ]) +
-				( rp5[ i ] - rp4[ i ]));
+			Params[ i ] = rp1[ i ] + (( rp2[ i ] - rp3[ i ]) +
+				( rp4[ i ] - rp5[ i ]));
+		}
+	}
+
+	/**
+	 * "Differential Evolution"-based solution generator, first implemented in
+	 * the CDEOpt class.
+	 */
+
+	void generateSol2c( CBiteRnd& rnd )
+	{
+		ptype* const Params = TmpParams;
+
+		memset( Params, 0, ParamCount * sizeof( Params[ 0 ]));
+
+		const int si1 = rnd.getSqrInt( CurPopSize );
+		const ptype* const rp1 = getParamsOrdered( si1 );
+
+		const int PairCount = 3;
+		const int pc = 1 + 2 * PairCount;
+		int PopIdx[ pc ];
+		PopIdx[ 0 ] = si1;
+
+		int pp = 1;
+		int i;
+		int j;
+
+		if( CurPopSize1 <= pc )
+		{
+			while( pp < pc )
+			{
+				PopIdx[ pp ] = rnd.getInt( CurPopSize );
+				pp++;
+			}
+		}
+		else
+		{
+			while( pp < pc )
+			{
+				const int sii = rnd.getInt( CurPopSize );
+
+				for( j = 0; j < pp; j++ )
+				{
+					if( PopIdx[ j ] == sii )
+					{
+						break;
+					}
+				}
+
+				if( j == pp )
+				{
+					PopIdx[ pp ] = sii;
+					pp++;
+				}
+			}
+		}
+
+		for( j = 0; j < PairCount; j++ )
+		{
+			const ptype* const rp2 = getParamsOrdered( PopIdx[ 1 + j * 2 ]);
+			const ptype* const rp3 = getParamsOrdered( PopIdx[ 2 + j * 2 ]);
+
+			for( i = 0; i < ParamCount; i++ )
+			{
+				Params[ i ] += rp2[ i ] - rp3[ i ];
+			}
+
+			const int k = rnd.getInt( ParamCount );
+			const int b = rnd.getInt( IntMantBits );
+
+			Params[ k ] += ( (ptype) rnd.getBit() << b ) -
+				( (ptype) rnd.getBit() << b );
+		}
+
+		for( i = 0; i < ParamCount; i++ )
+		{
+			Params[ i ] = rp1[ i ] + ( Params[ i ] >> 1 );
 		}
 	}
 
@@ -826,16 +928,11 @@ protected:
 		ptype* const Params = TmpParams;
 
 		const ptype* const MinParams = getParamsOrdered(
-			getMinSolIndex( 2, rnd, CurPopSize ));
-
-		if( NeedCentUpdate )
-		{
-			updateCentroid();
-		}
+			getMinSolIndex( 3, rnd, CurPopSize ));
 
 		const ptype* const cp = getCentroid();
 
-		const int si1 = (int) ( rnd.getRndValueSqr() * CurPopSize );
+		const int si1 = rnd.getSqrInt( CurPopSize );
 		const ptype* const rp1 = getParamsOrdered( si1 );
 		int i;
 
@@ -868,10 +965,10 @@ protected:
 		UseParams[ 0 ] = AltPop.getPopParams();
 		UseParams[ 1 ] = ParPop.getPopParams();
 
-		const int km = 3 + ( select( Gen4MixFacHist, rnd ) << 1 );
+		const int km = 5 + ( select( Gen4MixFacHist, rnd ) << 1 );
 
 		int p = rnd.getBit();
-		int si1 = (int) ( rnd.getRndValueSqr() * UseSize[ p ]);
+		int si1 = rnd.getSqrInt( UseSize[ p ]);
 		const ptype* rp1 = UseParams[ p ][ si1 ];
 
 		memcpy( Params, rp1, ParamCount * sizeof( Params[ 0 ]));
@@ -881,7 +978,7 @@ protected:
 		for( k = 1; k < km; k++ )
 		{
 			p = rnd.getBit();
-			si1 = (int) ( rnd.getRndValueSqr() * UseSize[ p ]);
+			si1 = rnd.getSqrInt( UseSize[ p ]);
 			rp1 = UseParams[ p ][ si1 ];
 
 			int i;
@@ -909,43 +1006,38 @@ protected:
 
 		const CBiteOptPop& ParPop = selectParPop( 2, rnd );
 
-		const ptype* const CrossParams1 = ParPop.getParamsOrdered(
-			(int) ( rnd.getRndValueSqr() * ParPop.getCurPopSize() ));
+		const int si1 = rnd.getSqrInt( ParPop.getCurPopSize() );
+		const ptype* const CrossParams1 = ( rnd.getBit() ?
+			ParPop.getParamsOrdered( si1 ) :
+			ParPop.getParamsOrdered( ParPop.getCurPopSize() - 1 - si1 ));
 
 		const CBiteOptPop& AltPop = selectAltPop( 2, rnd );
 
 		const ptype* const CrossParams2 = AltPop.getParamsOrdered(
-			(int) ( rnd.getRndValueSqr() * CurPopSize ));
+			rnd.getSqrInt( CurPopSize ));
 
-		const bool UseInv = select( Gen5BinvHist, rnd );
 		int i;
 
 		for( i = 0; i < ParamCount; i++ )
 		{
 			// Produce a random bit mixing mask.
 
-			const ptype crpl = (ptype) ( rnd.getUniformRaw2() & IntMantMask );
+			const ptype crpl = (ptype) ( rnd.getRaw() & IntMantMask );
 
-			ptype v1 = CrossParams1[ i ];
-			ptype v2 = ( UseInv && rnd.getBit() ?
-				~CrossParams2[ i ] : CrossParams2[ i ]);
+			const ptype v1 = CrossParams1[ i ];
+			const ptype v2 = CrossParams2[ i ];
+
+			Params[ i ] = ( v1 & crpl ) | ( v2 & ~crpl );
 
 			if( rnd.getBit() )
 			{
 				// Randomize a single bit, with 50% probability.
 
-				const int b = (int) ( rnd.getRndValue() * IntMantBits );
+				const int b = rnd.getInt( IntMantBits );
 
-				const ptype m = ~( (ptype) 1 << b );
-				const ptype bv = (ptype) rnd.getBit() << b;
-
-				v1 &= m;
-				v2 &= m;
-				v1 |= bv;
-				v2 |= bv;
+				Params[ i ] += ( (ptype) rnd.getBit() << b ) -
+					( (ptype) rnd.getBit() << b );
 			}
-
-			Params[ i ] = ( v1 & crpl ) | ( v2 & ~crpl );
 		}
 	}
 
@@ -959,15 +1051,23 @@ protected:
 		ptype* const Params = TmpParams;
 		const ptype* CrossParams[ 2 ];
 
-		const CBiteOptPop& ParPop = selectParPop( 2, rnd );
+		const CBiteOptPop& ParPop = selectParPop( 3, rnd );
 
 		CrossParams[ 0 ] = ParPop.getParamsOrdered(
-			(int) ( rnd.getRndValueSqr() * ParPop.getCurPopSize() ));
+			rnd.getSqrInt( ParPop.getCurPopSize() ));
 
-		const CBiteOptPop& AltPop = selectAltPop( 2, rnd );
+		const CBiteOptPop& AltPop = selectAltPop( 3, rnd );
 
-		CrossParams[ 1 ] = AltPop.getParamsOrdered(
-			(int) ( rnd.getRndValueSqr() * CurPopSize ));
+		if( rnd.getBit() )
+		{
+			CrossParams[ 1 ] = AltPop.getParamsOrdered(
+				CurPopSize1 - rnd.getSqrInt( CurPopSize ));
+		}
+		else
+		{
+			CrossParams[ 1 ] = AltPop.getParamsOrdered(
+				rnd.getSqrInt( CurPopSize ));
+		}
 
 		int i;
 
@@ -987,10 +1087,10 @@ protected:
 	{
 		ptype* const Params = TmpParams;
 
-		const double r = rnd.getRndValueSqr();
+		const double r = rnd.getSqr();
 		const int si = (int) ( r * r * CurPopSize );
 		const double v = getRealValue( getParamsOrdered( si ),
-			(int) ( rnd.getRndValue() * ParamCount ));
+			rnd.getInt( ParamCount ));
 
 		int i;
 
@@ -1012,15 +1112,15 @@ protected:
 		ptype* const Params = TmpParams;
 
 		const bool UseOldPop = ( OldPop.getCurPopPos() > 2 );
-		static const double p[ 4 ] = { 1.0, 1.5, 2.0, 2.5 };
+		static const double p[ 4 ] = { 1.5, 1.75, 2.0, 2.25 };
 		const double pwr = p[ select( Gen7PowFacHist, rnd )];
 		int i;
 
 		for( i = 0; i < ParamCount; i++ )
 		{
-			const double rv = pow( rnd.getRndValue(), pwr );
+			const double rv = pow( rnd.get(), pwr );
 
-			if( UseOldPop && rnd.getBit() )
+			if( UseOldPop && rnd.getBit() && rnd.getBit() )
 			{
 				Params[ i ] = OldPop.getParamsOrdered(
 					(int) ( rv * OldPop.getCurPopPos() ))[ i ];
@@ -1029,6 +1129,65 @@ protected:
 			{
 				Params[ i ] = getParamsOrdered(
 					(int) ( rv * CurPopSize ))[ i ];
+			}
+		}
+	}
+
+	/**
+	 * Solution generator that is DE-alike in its base. It calculates a
+	 * centroid of a number of best solutions, and then applies "mutation"
+	 * operation between the centroid and the solutions, using a random
+	 * multiplier.
+	 */
+
+	void generateSol8( CBiteRnd& rnd )
+	{
+		ptype* const Params = TmpParams;
+
+		const int NumSols = 5 + select( Gen8NumHist, rnd );
+		const ptype* rp[ 8 ];
+
+		// Calculate centroid of a number of selected solutions.
+
+		int si0 = rnd.getSqrInt( CurPopSize );
+		const ptype* rp0 = getParamsOrdered( si0 );
+		rp[ 0 ] = rp0;
+		memcpy( Params, rp0, ParamCount * sizeof( Params[ 0 ]));
+
+		int j;
+		int i;
+
+		for( j = 1; j < NumSols; j++ )
+		{
+			si0 = rnd.getSqrInt( CurPopSize );
+			rp0 = getParamsOrdered( si0 );
+			rp[ j ] = rp0;
+
+			for( i = 0; i < ParamCount; i++ )
+			{
+				Params[ i ] += rp0[ i ];
+			}
+		}
+
+		const double m = 1.0 / NumSols;
+
+		for( i = 0; i < ParamCount; i++ )
+		{
+			NewValues[ i ] = Params[ i ] * m; // Centroid.
+			Params[ i ] = (ptype) NewValues[ i ];
+		}
+
+		static const double Spans[ 4 ] = { 1.5, 2.5, 3.5, 4.5 };
+		const double gm = Spans[ select( Gen8SpanHist, rnd )] * sqrt( m );
+
+		for( j = 0; j < NumSols; j++ )
+		{
+			const double r = rnd.getGaussian() * gm;
+			rp0 = rp[ j ];
+
+			for( i = 0; i < ParamCount; i++ )
+			{
+				Params[ i ] += (ptype) (( rp0[ i ] - NewValues[ i ]) * r );
 			}
 		}
 	}
@@ -1186,7 +1345,7 @@ public:
 		{
 			while( true )
 			{
-				PushOpt = Opts[ (int) ( rnd.getRndValue() * OptCount )];
+				PushOpt = Opts[ rnd.getInt( OptCount )];
 
 				if( PushOpt != CurOpt )
 				{
@@ -1343,8 +1502,8 @@ public:
  * algorithm. Expected range is [1; 36]. Internally multiplies "iter" by
  * sqrt(M). 
  * @param attc The number of optimization attempts to perform.
- * @param stopc Stopping criteria (convergence check). 0: off, 1: 64*N,
- * 2: 128*N.
+ * @param stopc Stopping criteria (convergence check). 0: off, 1: 128*N,
+ * 2: 256*N.
  * @param rf Random number generator function; 0: use the default BiteOpt
  * PRNG. Note that the external RNG should be seeded externally.
  * @param rdata Data pointer to pass to the "rf" function.
@@ -1368,7 +1527,7 @@ inline int biteopt_minimize( const int N, biteopt_func f, void* data,
 	CBiteRnd rnd;
 	rnd.init( 1, rf, rdata );
 
-	const int sct = ( stopc <= 0 ? 0 : 64 * N * stopc );
+	const int sct = ( stopc <= 0 ? 0 : 128 * N * stopc );
 	const int useiter = (int) ( iter * sqrt( (double) M ));
 	int evals = 0;
 	int k;
@@ -1383,7 +1542,7 @@ inline int biteopt_minimize( const int N, biteopt_func f, void* data,
 		{
 			const int sc = opt.optimize( rnd );
 
-			if( sct != 0 && sc >= sct )
+			if( sct > 0 && sc >= sct )
 			{
 				evals++;
 				break;
