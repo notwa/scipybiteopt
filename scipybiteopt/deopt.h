@@ -27,7 +27,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 2022.14
+ * @version 2022.21
  */
 
 #ifndef DEOPT_INCLUDED
@@ -134,9 +134,9 @@ public:
 	 * objective function evaluation.
 	 *
 	 * @param rnd Random number generator.
-	 * @param OutCost If not NULL, pointer to variable that receives cost
+	 * @param[out] OutCost If not NULL, pointer to variable that receives cost
 	 * of the newly-evaluated solution.
-	 * @param OutValues If not NULL, pointer to array that receives a
+	 * @param[out] OutValues If not NULL, pointer to array that receives a
 	 * newly-evaluated parameter vector, in real scale, in real value bounds.
 	 * @return The number of non-improving iterations so far.
 	 */
@@ -156,8 +156,6 @@ public:
 			}
 
 			const double NewCost = optcost( NewValues );
-			sortPop( NewCost, CurPopPos );
-			updateBestCost( NewCost, NewValues );
 
 			if( OutCost != NULL )
 			{
@@ -166,11 +164,11 @@ public:
 
 			if( OutValues != NULL )
 			{
-				memcpy( OutValues, NewValues,
-					ParamCount * sizeof( OutValues[ 0 ]));
+				copyValues( OutValues, NewValues );
 			}
 
-			CurPopPos++;
+			updateBestCost( NewCost, NewValues,
+				updatePop( NewCost, p, false ));
 
 			if( CurPopPos == PopSize )
 			{
@@ -180,7 +178,7 @@ public:
 			return( 0 );
 		}
 
-		memset( TmpParams, 0, ParamCount * sizeof( TmpParams[ 0 ]));
+		zeroParams( TmpParams );
 
 		const double r1 = rnd.getSqr();
 		const int si1 = (int) ( r1 * r1 * CurPopSize );
@@ -266,19 +264,23 @@ public:
 
 		if( OutValues != NULL )
 		{
-			memcpy( OutValues, NewValues,
-				ParamCount * sizeof( OutValues[ 0 ]));
+			copyValues( OutValues, NewValues );
 		}
 
-		updateBestCost( NewCost, NewValues );
+		const int p = updatePop( NewCost, TmpParams, false, false );
 
-		if( isAcceptedCost( NewCost ))
+		if( p < CurPopSize )
 		{
-			memcpy( PopParams[ CurPopSize1 ], TmpParams,
-				ParamCount * sizeof( PopParams[ 0 ][ 0 ]));
+			updateBestCost( NewCost, NewValues, p );
 
-			sortPop( NewCost, CurPopSize1 );
-			StallCount = 0;
+			if( PopCosts[ 0 ] == PopCosts[ CurPopSize1 ])
+			{
+				StallCount++;
+			}
+			else
+			{
+				StallCount = 0;
+			}
 		}
 		else
 		{

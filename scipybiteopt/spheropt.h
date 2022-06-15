@@ -27,7 +27,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 2022.15
+ * @version 2022.20
  */
 
 #ifndef SPHEROPT_INCLUDED
@@ -129,9 +129,9 @@ public:
 	 * objective function evaluation.
 	 *
 	 * @param rnd Random number generator.
-	 * @param OutCost If not NULL, pointer to variable that receives cost
+	 * @param[out] OutCost If not NULL, pointer to variable that receives cost
 	 * of the newly-evaluated solution.
-	 * @param OutValues If not NULL, pointer to array that receives a
+	 * @param[out] OutValues If not NULL, pointer to array that receives a
 	 * newly-evaluated parameter vector, in real scale, in real value bounds.
 	 * @return The number of non-improving iterations so far.
 	 */
@@ -197,27 +197,11 @@ public:
 
 		if( OutValues != NULL )
 		{
-			memcpy( OutValues, NewValues,
-				ParamCount * sizeof( OutValues[ 0 ]));
+			copyValues( OutValues, NewValues );
 		}
 
-		updateBestCost( NewCost, NewValues );
-
-		if( CurPopPos < CurPopSize )
-		{
-			sortPop( NewCost, CurPopPos );
-			CurPopPos++;
-		}
-		else
-		{
-			if( isAcceptedCost( NewCost ))
-			{
-				memcpy( PopParams[ CurPopSize1 ], Params,
-					ParamCount * sizeof( PopParams[ 0 ][ 0 ]));
-
-				sortPop( NewCost, CurPopSize1 );
-			}
-		}
+		updateBestCost( NewCost, NewValues,
+			updatePop( NewCost, Params, false ));
 
 		AvgCost += NewCost;
 		cure++;
@@ -240,8 +224,8 @@ public:
 				applyHistsDecr( rnd );
 			}
 
+			resetCurPopPos();
 			AvgCost = 0.0;
-			CurPopPos = 0;
 			cure = 0;
 
 			update( rnd );

@@ -28,7 +28,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 2022.16
+ * @version 2022.21.1
  */
 
 #ifndef BITEAUX_INCLUDED
@@ -283,6 +283,15 @@ protected:
  * Called "histogram" for historic reasons. The current implementation uses
  * bubble-sort-alike method to update a vector of possible choices. The
  * selection is made as a weighted-random draw of a value from this vector.
+ * Previously, the class used simple statistical accumulation of optimization
+ * outcomes, to derive probabilites. The current approach is superior in that
+ * it has no "memory effects" associated with accumulation.
+ *
+ * The purpose of the class is to increase a chance of generating an
+ * acceptable solution. In practice, this class provides 10-15% more "good"
+ * solutions compared to uniformly-random choice selection. This, in turn,
+ * improves convergence smoothness and produces more diversity in outcomes in
+ * multiple solution attempts (retries) of complex multi-modal problems.
  */
 
 class CBiteOptHistBase
@@ -298,6 +307,7 @@ public:
 		: Count( aCount )
 		, CountSp( Count * SparseMul )
 		, CountSp1( CountSp - 1 )
+		, SelpThrs( CountSp * 2 / 3 )
 	{
 	}
 
@@ -369,7 +379,7 @@ public:
 			Sels[ Slot ][ Selp - 1 ] = Sel;
 		}
 
-		if( Selp > CountSp / 2 && Slot + 1 < SlotCount )
+		if( Selp > SelpThrs && Slot + 1 < SlotCount )
 		{
 			Slot++;
 		}
@@ -390,7 +400,7 @@ public:
 			Sels[ Slot ][ Selp + 1 ] = Sel;
 		}
 
-		if( Selp < CountSp / 2 && Slot > 0 )
+		if( Selp < SelpThrs && Slot > 0 )
 		{
 			Slot--;
 		}
@@ -437,6 +447,8 @@ protected:
 		///< vector.
 		///<
 	int CountSp1; ///< = CountSp - 1.
+		///<
+	int SelpThrs; ///< Threshold value for Slot switching.
 		///<
 	int Sels[ SlotCount ][ MaxCount * SparseMul ]; ///< Choice vectors.
 		///<
@@ -529,6 +541,7 @@ public:
 		ParamCount = aParamCount;
 		ParamCountI = 1.0 / ParamCount;
 		PopSize = aPopSize;
+		PopSize1 = aPopSize - 1;
 		CurPopSize = aPopSize;
 		CurPopSizeI = 1.0 / CurPopSize;
 		CurPopSize1 = aPopSize - 1;
@@ -573,16 +586,14 @@ public:
 
 		for( i = 0; i < CurPopSize; i++ )
 		{
-			memcpy( PopParams[ i ], s.PopParams[ i ],
-				ParamCount * sizeof( PopParams[ i ][ 0 ]));
+			copyParams( PopParams[ i ], s.PopParams[ i ]);
 		}
 
 		memcpy( PopCosts, s.PopCosts, CurPopSize * sizeof( PopCosts[ 0 ]));
 
 		if( !NeedCentUpdate )
 		{
-			memcpy( CentParams, s.CentParams, ParamCount *
-				sizeof( CentParams[ 0 ]));
+			copyParams( CentParams, s.CentParams );
 		}
 	}
 
@@ -604,7 +615,7 @@ public:
 
 		if( CurPopSize <= BatchCount )
 		{
-			memcpy( cp, PopParams[ 0 ], ParamCount * sizeof( cp[ 0 ]));
+			copyParams( cp, PopParams[ 0 ]);
 
 			for( j = 1; j < CurPopSize; j++ )
 			{
@@ -637,7 +648,7 @@ public:
 				pl -= c;
 				c--;
 
-				memcpy( tp, PopParams[ j ], ParamCount * sizeof( tp[ 0 ]));
+				copyParams( tp, PopParams[ j ]);
 
 				while( c > 0 )
 				{
@@ -737,96 +748,139 @@ public:
 	}
 
 	/**
-	 * Function returns "true" if the specified cost meets population's
-	 * cost constraint. The check is synchronized with the sortPop() function.
-	 *
-	 * @param Cost Cost value to evaluate.
-	 */
-
-	bool isAcceptedCost( const double Cost ) const
-	{
-		return( Cost <= PopCosts[ CurPopSize1 ]);
-	}
-
-	/**
 	 * Function replaces the highest-cost previous solution, updates centroid.
 	 * This function considers the value of the CurPopPos variable - if it is
-	 * smaller than the CurPopSize, the new solution will be added to
+	 * smaller than the PopSize, the new solution will be added to
 	 * population without any checks.
 	 *
-	 * @param NewCost Cost of the new solution.
+	 * @param UpdCost Cost of the new solution.
 	 * @param UpdParams New parameter values.
 	 * @param DoUpdateCentroid "True" if centroid should be updated using
 	 * running sum. This update is done for parallel populations.
-	 * @param DoCostCheck "True" if the cost contraint should be checked.
-	 * Function returns "CurPopSize" if the cost constraint was not met;
-	 * insertion position otherwise.
+	 * @param CanRejectCost If "true", solution with a duplicate cost will be
+	 * rejected; this may provide a performance improvement. Solutions can
+	 * only be rejected when the whole population was filled.
+	 * @return Insertion position, ">=CurPopSize" if the cost constraint was
+	 * not met.
 	 */
 
-	int updatePop( const double NewCost, const ptype* const UpdParams,
-		const bool DoUpdateCentroid, const bool DoCostCheck )
+	int updatePop( double UpdCost, const ptype* const UpdParams,
+		const bool DoUpdateCentroid, const bool CanRejectCost = true )
 	{
-		if( CurPopPos < CurPopSize )
+		int ri; // Index of population vector to be replaced.
+
+		if( CurPopPos < PopSize )
 		{
-			memcpy( PopParams[ CurPopPos ], UpdParams,
-				ParamCount * sizeof( PopParams[ CurPopPos ][ 0 ]));
+			ri = CurPopPos;
 
-			const int p = sortPop( NewCost, CurPopPos );
-			CurPopPos++;
-
-			return( p );
-		}
-
-		if( DoCostCheck )
-		{
-			if( !isAcceptedCost( NewCost ))
+			if( UpdCost != UpdCost ) // Handle NaN.
 			{
-				return( CurPopSize );
-			}
-		}
-
-		ptype* const rp = PopParams[ CurPopSize1 ];
-
-		if( DoUpdateCentroid )
-		{
-			ptype* const cp = CentParams;
-			const double m = CurPopSizeI;
-			int i;
-
-			for( i = 0; i < ParamCount; i++ )
-			{
-				cp[ i ] += (ptype) (( UpdParams[ i ] - rp[ i ]) * m );
-				rp[ i ] = UpdParams[ i ];
+				UpdCost = 1e300;
 			}
 		}
 		else
 		{
-			memcpy( rp, UpdParams, ParamCount * sizeof( rp[ 0 ]));
-			NeedCentUpdate = true;
+			ri = PopSize1;
+
+			if( UpdCost != UpdCost || // Check for NaN.
+				UpdCost > PopCosts[ ri ])
+			{
+				return( PopSize );
+			}
 		}
 
-		return( sortPop( NewCost, CurPopSize1 ));
+		// Perform binary search of a cost within the population.
+
+		int p = 0;
+		int i = ri;
+
+		while( p < i )
+		{
+			const int mid = ( p + i ) >> 1;
+
+			if( PopCosts[ mid ] >= UpdCost )
+			{
+				i = mid;
+			}
+			else
+			{
+				p = mid + 1;
+			}
+		}
+
+		if( CurPopPos < PopSize )
+		{
+			CurPopPos++;
+		}
+		else
+		{
+			if( CanRejectCost && PopCosts[ p ] == UpdCost )
+			{
+				// Reject same-cost solution.
+
+				return( PopSize );
+			}
+		}
+
+		ptype* const rp = PopParams[ ri ];
+
+		const int mc = ri - p;
+		double* const pc = PopCosts + p;
+		ptype** const pp = PopParams + p;
+		memmove( pc + 1, pc, mc * sizeof( pc[ 0 ]));
+		memmove( pp + 1, pp, mc * sizeof( pp[ 0 ]));
+
+		*pc = UpdCost;
+		*pp = rp;
+
+		if( rp != UpdParams )
+		{
+			if( DoUpdateCentroid )
+			{
+				ptype* const cp = CentParams;
+				const double m = CurPopSizeI;
+
+				for( i = 0; i < ParamCount; i++ )
+				{
+					cp[ i ] += (ptype) (( UpdParams[ i ] - rp[ i ]) * m );
+					rp[ i ] = UpdParams[ i ];
+				}
+			}
+			else
+			{
+				copyParams( rp, UpdParams );
+				NeedCentUpdate = true;
+			}
+		}
+		else
+		{
+			if( DoUpdateCentroid )
+			{
+				ptype* const cp = CentParams;
+				const double m = CurPopSizeI;
+
+				for( i = 0; i < ParamCount; i++ )
+				{
+					cp[ i ] += (ptype) ( UpdParams[ i ] * m );
+				}
+			}
+			else
+			{
+				NeedCentUpdate = true;
+			}
+		}
+
+		return( p );
 	}
 
 	/**
 	 * Function increases current population size, and updates the required
 	 * variables. This function can only be called if CurPopSize is less than
 	 * PopSize.
-	 *
-	 * @param CopyVec If >=, a parameter vector with this index will be copied
-	 * to the newly-added vector. The maximal population cost will be copied
-	 * as well.
 	 */
 
-	void incrCurPopSize( const int CopyVec = -1 )
+	void incrCurPopSize()
 	{
-		if( CopyVec >= 0 )
-		{
-			PopCosts[ CurPopSize ] = PopCosts[ CurPopSize1 ];
-			memcpy( PopParams[ CurPopSize ], PopParams[ CopyVec ],
-				ParamCount * sizeof( PopParams[ CurPopSize ][ 0 ]));
-		}
-
 		CurPopSize++;
 		CurPopSizeI = 1.0 / CurPopSize;
 		CurPopSize1++;
@@ -835,7 +889,8 @@ public:
 
 	/**
 	 * Function decreases current population size, and updates the required
-	 * variables.
+	 * variables. This function can only be called if CurPopSize is greater
+	 * than 1.
 	 */
 
 	void decrCurPopSize()
@@ -874,6 +929,8 @@ protected:
 	double ParamCountI; ///< = 1.0 / ParamCount.
 		///<
 	int PopSize; ///< The size of population in use (maximal).
+		///<
+	int PopSize1; ///< = PopSize - 1.
 		///<
 	int CurPopSize; ///< Current population size.
 		///<
@@ -914,36 +971,38 @@ protected:
 	}
 
 	/**
-	 * Function performs re-sorting of the population based on the cost of a
-	 * newly-added solution, and stores new cost.
+	 * An aux function that resets a parameter vector to zero values.
 	 *
-	 * @param Cost Solution's cost.
-	 * @param i Solution's index (usually, CurPopSize1).
-	 * @return Ordered insertion index.
+	 * @param[out] dst Destination vector.
 	 */
 
-	int sortPop( const double Cost, int i )
+	void zeroParams( ptype* const dst ) const
 	{
-		ptype* const InsertParams = PopParams[ i ];
+		memset( dst, 0, ParamCount * sizeof( dst[ 0 ]));
+	}
 
-		while( i > 0 )
-		{
-			const double c1 = PopCosts[ i - 1 ];
+	/**
+	 * An aux function that copies a parameter vector.
+	 *
+	 * @param[out] dst Destination vector.
+	 * @param[in] src Source vector.
+	 */
 
-			if( c1 < Cost )
-			{
-				break;
-			}
+	void copyParams( ptype* const dst, const ptype* const src ) const
+	{
+		memcpy( dst, src, ParamCount * sizeof( dst[ 0 ]));
+	}
 
-			PopCosts[ i ] = c1;
-			PopParams[ i ] = PopParams[ i - 1 ];
-			i--;
-		}
+	/**
+	 * An aux function that copies a real solution vector.
+	 *
+	 * @param[out] dst Destination vector.
+	 * @param[in] src Source vector.
+	 */
 
-		PopCosts[ i ] = Cost;
-		PopParams[ i ] = InsertParams;
-
-		return( i );
+	void copyValues( double* const dst, const double* const src ) const
+	{
+		memcpy( dst, src, ParamCount * sizeof( dst[ 0 ]));
 	}
 
 	/**
@@ -1101,10 +1160,10 @@ protected:
 	 *
 	 * @param Cost Cost of parameter vector, used to filter considered
 	 * parallel population pool.
-	 * @param p Parameter vector.
+	 * @param Params Parameter vector.
 	 */
 
-	int getMinDistParPop( const double Cost, const ptype* const p ) const
+	int getMinDistParPop( const double Cost, const ptype* const Params ) const
 	{
 		int ppi[ MaxParPopCount ];
 		int ppc = 0;
@@ -1112,11 +1171,8 @@ protected:
 
 		for( i = 0; i < ParPopCount; i++ )
 		{
-			if( ParPops[ i ] -> isAcceptedCost( Cost ))
-			{
-				ppi[ ppc ] = i;
-				ppc++;
-			}
+			ppi[ ppc ] = i;
+			ppc++;
 		}
 
 		if( ppc == 0 )
@@ -1144,7 +1200,7 @@ protected:
 
 			for( i = 0; i < ParamCount; i++ )
 			{
-				const ptype v = p[ i ];
+				const ptype v = Params[ i ];
 				const double d0 = (double) ( v - c0[ i ]);
 				const double d1 = (double) ( v - c1[ i ]);
 				const double d2 = (double) ( v - c2[ i ]);
@@ -1172,7 +1228,7 @@ protected:
 
 			for( i = 0; i < ParamCount; i++ )
 			{
-				const ptype v = p[ i ];
+				const ptype v = Params[ i ];
 				const double d0 = (double) ( v - c0[ i ]);
 				const double d1 = (double) ( v - c1[ i ]);
 				const double d2 = (double) ( v - c2[ i ]);
@@ -1195,7 +1251,7 @@ protected:
 
 			for( i = 0; i < ParamCount; i++ )
 			{
-				const ptype v = p[ i ];
+				const ptype v = Params[ i ];
 				const double d0 = (double) ( v - c0[ i ]);
 				const double d1 = (double) ( v - c1[ i ]);
 				s0 += d0 * d0;
@@ -1356,12 +1412,14 @@ protected:
 	using CBiteOptParPops< ptype > :: IntMantMult;
 	using CBiteOptParPops< ptype > :: ParamCount;
 	using CBiteOptParPops< ptype > :: PopSize;
+	using CBiteOptParPops< ptype > :: PopSize1;
 	using CBiteOptParPops< ptype > :: CurPopSize;
 	using CBiteOptParPops< ptype > :: CurPopSizeI;
 	using CBiteOptParPops< ptype > :: CurPopSize1;
 	using CBiteOptParPops< ptype > :: CurPopPos;
 	using CBiteOptParPops< ptype > :: NeedCentUpdate;
 	using CBiteOptParPops< ptype > :: resetCurPopPos;
+	using CBiteOptParPops< ptype > :: copyValues;
 
 	double* MinValues; ///< Minimal parameter values.
 		///<
@@ -1441,7 +1499,7 @@ protected:
 
 		CurPopSize = PopSize;
 		CurPopSizeI = 1.0 / PopSize;
-		CurPopSize1 = PopSize - 1;
+		CurPopSize1 = PopSize1;
 		BestCost = 1e300;
 		StallCount = 0;
 		HiBound = 1e300;
@@ -1489,19 +1547,26 @@ protected:
 	 * Function updates BestCost value and BestValues array, if the specified
 	 * NewCost is better.
 	 *
-	 * @param NewCost New solution's cost.
+	 * @param UpdCost New solution's cost.
 	 * @param UpdValues New solution's values. The values should be in the
 	 * "real" value range.
+	 * @param p New solution's position within population. If <0, position
+	 * unknown, and the UpdCost should be evaluated.
 	 */
 
-	void updateBestCost( const double NewCost, const double* const UpdValues )
+	void updateBestCost( const double UpdCost, const double* const UpdValues,
+		const int p = -1 )
 	{
-		if( NewCost <= BestCost )
+		if( UpdCost != UpdCost ) // Check for NaN.
 		{
-			BestCost = NewCost;
+			return;
+		}
 
-			memcpy( BestValues, UpdValues,
-				ParamCount * sizeof( BestValues[ 0 ]));
+		if( p == 0 || ( p < 0 && UpdCost <= BestCost ))
+		{
+			BestCost = UpdCost;
+
+			copyValues( BestValues, UpdValues );
 		}
 	}
 
