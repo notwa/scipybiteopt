@@ -31,7 +31,7 @@
 #ifndef BITEOPT_INCLUDED
 #define BITEOPT_INCLUDED
 
-#define BITEOPT_VERSION "2022.21"
+#define BITEOPT_VERSION "2022.24"
 
 #include "spheropt.h"
 #include "nmsopt.h"
@@ -86,6 +86,8 @@ public:
 		addHist( Gen1MoveHist, "Gen1MoveHist" );
 		addHist( Gen1MoveAsyncHist, "Gen1MoveAsyncHist" );
 		addHist( Gen1MoveSpanHist, "Gen1MoveSpanHist" );
+		addHist( Gen2ModeHist, "Gen2ModeHist" );
+		addHist( Gen2bModeHist, "Gen2bModeHist" );
 		addHist( Gen4MixFacHist, "Gen4MixFacHist" );
 		addHist( Gen7PowFacHist, "Gen7PowFacHist" );
 		addHist( Gen8ModeHist, "Gen8ModeHist" );
@@ -530,13 +532,17 @@ protected:
 	CBiteOptHist< 2 > Gen1AllpHist; ///< Generator method 1's Allp
 		///< histogram.
 		///<
-	CBiteOptHist< 2 > Gen1MoveHist; ///< Generator method 1's Move
-		///< histogram.
+	CBiteOptHist< 2 > Gen1MoveHist; ///< Generator method 1's Move histogram.
 		///<
 	CBiteOptHist< 2 > Gen1MoveAsyncHist; ///< Generator method 1's Move
 		///< async histogram.
 		///<
 	CBiteOptHist< 4 > Gen1MoveSpanHist; ///< Generator method 1's Move span
+		///< histogram.
+		///<
+	CBiteOptHist< 2 > Gen2ModeHist; ///< Generator method 2's Mode histogram.
+		///<
+	CBiteOptHist< 2 > Gen2bModeHist; ///< Generator method 2b's Mode
 		///< histogram.
 		///<
 	CBiteOptHist< 4 > Gen4MixFacHist; ///< Generator method 4's mixing
@@ -777,7 +783,9 @@ protected:
 	}
 
 	/**
-	 * The "Differential Evolution"-based solution generator.
+	 * The "Differential Evolution"-based solution generator. Note that
+	 * compared to a usual DE, this generator does not use crossover, and
+	 * it uses one, or an average of two best solutions as the base.
 	 */
 
 	void generateSol2( CBiteRnd& rnd )
@@ -800,12 +808,27 @@ protected:
 		// the worst (maximal) parameter vector, plus a difference of two
 		// random vectors.
 
+		const int Mode = select( Gen2ModeHist, rnd );
 		int i;
 
-		for( i = 0; i < ParamCount; i++ )
+		if( Mode == 0 )
 		{
-			Params[ i ] = rp1[ i ] + ((( rp2[ i ] - rp3[ i ]) +
-				( rp4[ i ] - rp5[ i ])) >> 1 );
+			for( i = 0; i < ParamCount; i++ )
+			{
+				Params[ i ] = rp1[ i ] + ((( rp2[ i ] - rp3[ i ]) +
+					( rp4[ i ] - rp5[ i ])) >> 1 );
+			}
+		}
+		else
+		{
+			const ptype* const rp1b = getParamsOrdered(
+				rnd.getSqrInt( CurPopSize ));
+
+			for( i = 0; i < ParamCount; i++ )
+			{
+				Params[ i ] = (( rp1[ i ] + rp1b[ i ]) +
+					( rp2[ i ] - rp3[ i ]) + ( rp4[ i ] - rp5[ i ])) >> 1;
+			}
 		}
 	}
 
@@ -832,12 +855,27 @@ protected:
 		const ptype* const rp4 = AltPop.getParamsOrdered( si4 );
 		const ptype* const rp5 = AltPop.getParamsOrdered( CurPopSize1 - si4 );
 
+		const int Mode = select( Gen2bModeHist, rnd );
 		int i;
 
-		for( i = 0; i < ParamCount; i++ )
+		if( Mode == 0 )
 		{
-			Params[ i ] = rp1[ i ] + (( rp2[ i ] - rp3[ i ]) +
-				( rp4[ i ] - rp5[ i ]));
+			for( i = 0; i < ParamCount; i++ )
+			{
+				Params[ i ] = rp1[ i ] + (( rp2[ i ] - rp3[ i ]) +
+					( rp4[ i ] - rp5[ i ]));
+			}
+		}
+		else
+		{
+			const ptype* const rp1b = getParamsOrdered(
+				rnd.getSqrInt( CurPopSize ));
+
+			for( i = 0; i < ParamCount; i++ )
+			{
+				Params[ i ] = (( rp1[ i ] + rp1b[ i ]) >> 1 ) +
+					( rp2[ i ] - rp3[ i ]) + ( rp4[ i ] - rp5[ i ]);
+			}
 		}
 	}
 
@@ -926,19 +964,21 @@ protected:
 	{
 		ptype* const Params = TmpParams;
 
-		const ptype* const MinParams = getParamsOrdered(
+		const ptype* const rp1 = getParamsOrdered(
 			getMinSolIndex( 3, rnd, CurPopSize ));
 
-		const ptype* const cp = getCentroid();
+		const double* const cp = getCentroid();
+		const double cm = getCentroidMult();
 
-		const int si1 = rnd.getSqrInt( CurPopSize );
-		const ptype* const rp1 = getParamsOrdered( si1 );
+		const ptype* const rp2 = getParamsOrdered(
+			rnd.getSqrInt( CurPopSize ));
+
 		int i;
 
 		for( i = 0; i < ParamCount; i++ )
 		{
-			Params[ i ] = ( rnd.getBit() ? cp[ i ] :
-				MinParams[ i ] + ( MinParams[ i ] - rp1[ i ]));
+			Params[ i ] = ( rnd.getBit() ? (ptype) ( cp[ i ] * cm ) :
+				rp1[ i ] + ( rp1[ i ] - rp2[ i ]));
 		}
 	}
 
@@ -1015,14 +1055,12 @@ protected:
 
 		for( i = 0; i < ParamCount; i++ )
 		{
-			// Produce a random bit mixing mask.
+			// Produce a random bit-mixing mask.
 
 			const ptype crpl = (ptype) ( rnd.getRaw() & IntMantMask );
 
-			const ptype v1 = CrossParams1[ i ];
-			const ptype v2 = CrossParams2[ i ];
-
-			Params[ i ] = ( v1 & crpl ) | ( v2 & ~crpl );
+			Params[ i ] = ( CrossParams1[ i ] & crpl ) |
+				( CrossParams2[ i ] & ~crpl );
 
 			if( rnd.getBit() )
 			{
