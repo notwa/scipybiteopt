@@ -31,7 +31,7 @@
 #ifndef BITEOPT_INCLUDED
 #define BITEOPT_INCLUDED
 
-#define BITEOPT_VERSION "2022.25.1"
+#define BITEOPT_VERSION "2022.27"
 
 #include "spheropt.h"
 #include "nmsopt.h"
@@ -86,9 +86,11 @@ public:
 		addSel( Gen1MoveSpanSel, "Gen1MoveSpanSel" );
 		addSel( Gen2ModeSel, "Gen2ModeSel" );
 		addSel( Gen2bModeSel, "Gen2bModeSel" );
+		addSel( Gen2cModeSel, "Gen2cModeSel" );
 		addSel( Gen2dModeSel, "Gen2dModeSel" );
 		addSel( Gen3ModeSel, "Gen3ModeSel" );
 		addSel( Gen4MixFacSel, "Gen4MixFacSel" );
+		addSel( Gen5bModeSel, "Gen5bModeSel" );
 		addSel( Gen7PowFacSel, "Gen7PowFacSel" );
 		addSel( Gen8ModeSel, "Gen8ModeSel" );
 		addSel( Gen8NumSel, "Gen8NumSel" );
@@ -229,7 +231,7 @@ public:
 
 		if( DoInitEvals )
 		{
-			const ptype* const Params = PopParams[ CurPopPos ];
+			const ptype* const Params = getCurParams();
 
 			for( i = 0; i < ParamCount; i++ )
 			{
@@ -532,12 +534,16 @@ protected:
 		///<
 	CBiteSel< 2 > Gen2bModeSel; ///< Generator method 2b's Mode selector.
 		///<
+	CBiteSel< 2 > Gen2cModeSel; ///< Generator method 2c's Mode selector.
+		///<
 	CBiteSel< 2 > Gen2dModeSel; ///< Generator method 2d's Mode selector.
 		///<
 	CBiteSel< 4 > Gen3ModeSel; ///< Generator method 3's Mode selector.
 		///<
 	CBiteSel< 4 > Gen4MixFacSel; ///< Generator method 4's mixing count
 		///< selector.
+		///<
+	CBiteSel< 2 > Gen5bModeSel; ///< Generator method 5b's Mode selector.
 		///<
 	CBiteSel< 4 > Gen7PowFacSel; ///< Generator method 7's Power selector.
 		///<
@@ -674,8 +680,8 @@ protected:
 	int getMinSolIndex( const int gi, CBiteRnd& rnd, const int ps )
 	{
 		static const double pp[ 4 ] = { 0.05, 0.125, 0.25, 0.5 };
-		const double r = ps * pow( rnd.get(),
-			ps * pp[ select( MinSolPwrSel[ gi ], rnd )]);
+		const double r = ps * rnd.getPow( ps *
+			pp[ select( MinSolPwrSel[ gi ], rnd )]);
 
 		static const double rm[ 4 ] = { 0.0, 0.125, 0.25, 0.5 };
 
@@ -869,8 +875,8 @@ protected:
 	}
 
 	/**
-	 * "Differential Evolution"-based solution generator, first implemented in
-	 * the CDEOpt class.
+	 * "Differential Evolution"-based solution generator, almost an exact
+	 * replica of the CDEOpt optimizer.
 	 */
 
 	void generateSol2c( CBiteRnd& rnd )
@@ -878,7 +884,7 @@ protected:
 		ptype* const Params = TmpParams;
 		zeroParams( Params );
 
-		const int si1 = rnd.getSqrInt( CurPopSize );
+		const int si1 = rnd.getPowInt( 4.0, CurPopSize / 2 );
 		const ptype* const rp1 = getParamsOrdered( si1 );
 
 		const int PairCount = 3;
@@ -920,26 +926,58 @@ protected:
 			}
 		}
 
-		for( j = 0; j < PairCount; j++ )
-		{
-			const ptype* const rp2 = getParamsOrdered( PopIdx[ 1 + j * 2 ]);
-			const ptype* const rp3 = getParamsOrdered( PopIdx[ 2 + j * 2 ]);
-
-			for( i = 0; i < ParamCount; i++ )
-			{
-				Params[ i ] += rp2[ i ] - rp3[ i ];
-			}
-
-			const int k = rnd.getInt( ParamCount );
-			const int b = rnd.getInt( IntMantBits );
-
-			Params[ k ] += ( (ptype) rnd.getBit() << b ) -
-				( (ptype) rnd.getBit() << b );
-		}
+		const ptype* const rp2 = getParamsOrdered( PopIdx[ 1 ]);
+		const ptype* const rp3 = getParamsOrdered( PopIdx[ 2 ]);
+		const ptype* const rp4 = getParamsOrdered( PopIdx[ 3 ]);
+		const ptype* const rp5 = getParamsOrdered( PopIdx[ 4 ]);
+		const ptype* const rp6 = getParamsOrdered( PopIdx[ 5 ]);
+		const ptype* const rp7 = getParamsOrdered( PopIdx[ 6 ]);
 
 		for( i = 0; i < ParamCount; i++ )
 		{
-			Params[ i ] = rp1[ i ] + ( Params[ i ] >> 1 );
+			Params[ i ] = ( rp2[ i ] - rp3[ i ]) + ( rp4[ i ] - rp5[ i ]) +
+				( rp6[ i ] - rp7[ i ]);
+		}
+
+		if( rnd.getBit() && rnd.getBit() )
+		{
+			const int k = rnd.getInt( ParamCount );
+
+			// Produce sparsely-random bit-strings.
+
+			const ptype v1 = (ptype) ( rnd.getRaw() & rnd.getRaw() &
+				rnd.getRaw() & rnd.getRaw() & rnd.getRaw() & IntMantMask );
+
+			const ptype v2 = (ptype) ( rnd.getRaw() & rnd.getRaw() &
+				rnd.getRaw() & rnd.getRaw() & rnd.getRaw() & IntMantMask );
+
+			Params[ k ] += v1 - v2; // Apply in TPDF manner.
+		}
+
+		const int Mode = select( Gen2cModeSel, rnd );
+
+		if( Mode == 0 )
+		{
+			int si2 = si1 + rnd.getBit() * 2 - 1;
+
+			if( si2 < 0 )
+			{
+				si2 = 1;
+			}
+
+			const ptype* const rp1b = getParamsOrdered( si2 );
+
+			for( i = 0; i < ParamCount; i++ )
+			{
+				Params[ i ] = ( rp1[ i ] + rp1b[ i ] + Params[ i ]) >> 1;
+			}
+		}
+		else
+		{
+			for( i = 0; i < ParamCount; i++ )
+			{
+				Params[ i ] = rp1[ i ] + ( Params[ i ] >> 1 );
+			}
 		}
 	}
 
@@ -1132,7 +1170,7 @@ protected:
 	void generateSol5b( CBiteRnd& rnd )
 	{
 		ptype* const Params = TmpParams;
-		const ptype* CrossParams[ 2 ];
+		const ptype* CrossParams[ 4 ];
 
 		const CBitePop& ParPop = selectParPop( 3, rnd );
 
@@ -1152,11 +1190,29 @@ protected:
 				rnd.getSqrInt( CurPopSize ));
 		}
 
+		const int Mode = select( Gen5bModeSel, rnd );
 		int i;
 
-		for( i = 0; i < ParamCount; i++ )
+		if( Mode == 0 )
 		{
-			Params[ i ] = CrossParams[ rnd.getBit() ][ i ];
+			for( i = 0; i < ParamCount; i++ )
+			{
+				Params[ i ] = CrossParams[ rnd.getBit() ][ i ];
+			}
+		}
+		else
+		{
+			CrossParams[ 2 ] = ParPop.getParamsOrdered(
+				rnd.getSqrInt( ParPop.getCurPopSize() ));
+
+			CrossParams[ 3 ] = AltPop.getParamsOrdered(
+				rnd.getSqrInt( CurPopSize ));
+
+			for( i = 0; i < ParamCount; i++ )
+			{
+				Params[ i ] = CrossParams[ rnd.getBit() << 1 |
+					rnd.getBit() ][ i ];
+			}
 		}
 	}
 
@@ -1172,8 +1228,7 @@ protected:
 	{
 		ptype* const Params = TmpParams;
 
-		const double r = rnd.getSqr();
-		const int si = (int) ( r * r * CurPopSize );
+		const int si = rnd.getPowInt( 4.0, CurPopSize );
 		const double v = getRealValue( getParamsOrdered( si ),
 			rnd.getInt( ParamCount ));
 
@@ -1194,9 +1249,8 @@ protected:
 	{
 		ptype* const Params = TmpParams;
 
-		const double r = rnd.getSqr();
-		const double r2 = r * r;
-		const int si = (int) ( r2 * CurPopSize );
+		const double r = rnd.getPow( 4.0 );
+		const int si = (int) ( r * CurPopSize );
 
 		double v[ 2 ];
 		v[ 0 ] = getRealValue( getParamsOrdered( si ),
@@ -1205,7 +1259,7 @@ protected:
 		v[ 1 ] = getRealValue( getParamsOrdered( si ),
 			rnd.getInt( ParamCount ));
 
-		const double m = 1.0 - r2 * r2;
+		const double m = 1.0 - r * r;
 		v[ 0 ] *= m; // Move towards real 0, useful for some functions.
 		v[ 1 ] *= m;
 
@@ -1236,7 +1290,7 @@ protected:
 
 		for( i = 0; i < ParamCount; i++ )
 		{
-			const double rv = pow( rnd.get(), pwr );
+			const double rv = rnd.getPow( pwr );
 
 			if( UseOldPop && rnd.getBit() && rnd.getBit() )
 			{

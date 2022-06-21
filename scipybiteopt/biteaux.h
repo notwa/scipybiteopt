@@ -28,7 +28,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 2022.25.1
+ * @version 2022.27
  */
 
 #ifndef BITEAUX_INCLUDED
@@ -141,6 +141,70 @@ public:
 	}
 
 	/**
+	 * @return Random number in the range [0; 1), raised to the specified
+	 * power. The function has branching for optimization.
+	 */
+
+	double getPow( const double p )
+	{
+		const double v = ( advance() >> ( 64 - 53 )) * 0x1p-53;
+
+		if( p < 2.0 )
+		{
+			if( p < 1.0 )
+			{
+				if( p == 0.5 )
+				{
+					return( sqrt( v ));
+				}
+
+				if( p == 0.25 )
+				{
+					return( sqrt( sqrt( v )));
+				}
+			}
+			else
+			{
+				if( p == 1.5 )
+				{
+					return( v * sqrt( v ));
+				}
+
+				if( p == 1.75 )
+				{
+					const double sv = sqrt( v );
+					return( v * sv * sqrt( sv ));
+				}
+
+				if( p == 1.0 )
+				{
+					return( v );
+				}
+			}
+		}
+		else
+		{
+			if( p == 4.0 )
+			{
+				const double v2 = v * v;
+				return( v2 * v2 );
+			}
+
+			if( p == 3.0 )
+			{
+				return( v * v * v );
+			}
+
+			if( p == 2.0 )
+			{
+				return( v * v );
+			}
+		}
+
+		return( pow( v, p ));
+	}
+
+	/**
 	 * @param N1 Integer value range.
 	 * @return Random integer number in the range [0; N1). Beta distribution
 	 * with Alpha=0.5, Beta=1 (squared). N1 denotes the number of bins, not
@@ -150,6 +214,18 @@ public:
 	int getSqrInt( const int N1 )
 	{
 		return( (int) ( getSqr() * N1 ));
+	}
+
+	/**
+	 * @param N1 Integer value range.
+	 * @return Random integer number in the range [0; N1), raised to the
+	 * specified power. N1 denotes the number of bins, not the maximal
+	 * returned value.
+	 */
+
+	int getPowInt( const double p, const int N1 )
+	{
+		return( (int) ( getPow( p ) * N1 ));
 	}
 
 	/**
@@ -444,6 +520,7 @@ public:
 	{
 		const double r = rnd.get();
 		Selp = (int) ( r * sqrt( r ) * CountSp );
+
 		Sel = Sels[ Slot ][ Selp ];
 
 		return( Sel );
@@ -793,19 +870,6 @@ public:
 	}
 
 	/**
-	 * An aux function that advances the specified pointer, previously
-	 * obtained via either getCnsPtr(), getObjPtr(), or getRankPtr() function.
-	 * This can be useful for sorted enumeration of population values.
-	 *
-	 * @param[in,out] p Pointer variable to advance.
-	 */
-
-	void advancePtr( double*& p ) const
-	{
-		p = (double*) ( (uintptr_t) p + (uintptr_t) PopItemSize );
-	}
-
-	/**
 	 * Function returns a pointer to array of population vector pointers,
 	 * which are sorted in the ascending cost order.
 	 */
@@ -821,7 +885,7 @@ public:
 	 * returns pointer to a temporary vector.
 	 */
 
-	ptype* getCurPosParams() const
+	ptype* getCurParams() const
 	{
 		return( PopParams[ CurPopPos ]);
 	}
