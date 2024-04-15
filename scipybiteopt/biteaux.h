@@ -8,7 +8,7 @@
  *
  * @section license License
  * 
- * Copyright (c) 2016-2022 Aleksey Vaneev
+ * Copyright (c) 2016-2023 Aleksey Vaneev
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -28,7 +28,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 2022.30
+ * @version 2023.7
  */
 
 #ifndef BITEAUX_INCLUDED
@@ -205,6 +205,16 @@ public:
 	}
 
 	/**
+	 * @return Random number in the range (-1; 1) with approximately
+	 * logarithmic PDF, two-lobe with peak at 0.
+	 */
+
+	double getLog()
+	{
+		return( get() * sin( get() * 6.28318530717958648 ));
+	}
+
+	/**
 	 * @param N1 Integer value range.
 	 * @return Random integer number in the range [0; N1). Beta distribution
 	 * with Alpha=0.5, Beta=1 (squared). N1 denotes the number of bins, not
@@ -226,6 +236,17 @@ public:
 	int getPowInt( const double p, const int N1 )
 	{
 		return( (int) ( getPow( p ) * N1 ));
+	}
+
+	/**
+	 * @param N1 Integer value range.
+	 * @return Random integer number in the range [0; N1), with approximately
+	 * logarithmic PDF, peak at 0.
+	 */
+
+	int getLogInt( const int N1 )
+	{
+		return( (int) ( fabs( getLog() ) * N1 ));
 	}
 
 	/**
@@ -318,15 +339,10 @@ public:
 protected:
 	biteopt_rng rf; ///< External random number generator to use; NULL: use
 		///< the default PRNG.
-		///<
 	void* rdata; ///< Data pointer to pass to the "rf" function.
-		///<
 	uint64_t Seed, lcg, Hash; ///< PRNG state variables.
-		///<
 	uint64_t BitPool; ///< Bit pool.
-		///<
 	int BitsLeft; ///< The number of bits left in the bit pool.
-		///<
 
 	/**
 	 * Function advances the PRNG and returns the next PRNG value.
@@ -368,8 +384,7 @@ protected:
  * acceptable solution. In practice, this class provides 10-15% more "good"
  * solutions compared to uniformly-random choice selection. This, in turn,
  * improves convergence smoothness and produces more diversity in outcomes in
- * multiple solution attempts (retries) of complex multi-modal objective
- * functions.
+ * multiple solution attempts of complex multi-modal objective functions.
  */
 
 class CBiteSelBase
@@ -406,7 +421,6 @@ public:
 		SparseMul = 5;
 		CountSp = Count * SparseMul;
 		CountSp1 = CountSp - 1;
-		SelpThrs = CountSp * 2 / 3;
 
 		const int NewCapacity = SlotCount * CountSp;
 
@@ -454,6 +468,7 @@ public:
 		Slot = 0;
 
 		select( rnd );
+		IsSelected = false;
 	}
 
 	/**
@@ -475,15 +490,30 @@ public:
 
 	void incr( CBiteRnd& rnd, const double v = 1.0 )
 	{
-		if( Selp > 0 && rnd.get() < v * v ) // Boost an efficient choice.
+		const int dp = (int) ( -Selp * v * v );
+
+		if( dp < 0 ) // Boost an efficient choice.
 		{
-			Sels[ Slot ][ Selp ] = Sels[ Slot ][ Selp - 1 ];
-			Sels[ Slot ][ Selp - 1 ] = Sel;
+			if( dp == -1 )
+			{
+				Sels[ Slot ][ Selp ] = Sels[ Slot ][ Selp - 1 ];
+				Sels[ Slot ][ Selp - 1 ] = Sel;
+			}
+			else
+			{
+				const int np = Selp + dp;
+				memmove( Sels[ Slot ] + np + 1, Sels[ Slot ] + np,
+					-dp * sizeof( Sels[ Slot ][ 0 ]));
+
+				Sels[ Slot ][ np ] = Sel;
+			}
 		}
 
-		if( Selp > SelpThrs && Slot + 1 < SlotCount )
+		if( Slot > 0 )
 		{
-			Slot++;
+			int* const t = Sels[ Slot ];
+			Sels[ Slot ] = Sels[ Slot - 1 ];
+			Sels[ Slot - 1 ] = t;
 		}
 	}
 
@@ -502,9 +532,11 @@ public:
 			Sels[ Slot ][ Selp + 1 ] = Sel;
 		}
 
-		if( Selp < SelpThrs && Slot > 0 )
+		if( Slot < SlotCount - 1 )
 		{
-			Slot--;
+			int* const t = Sels[ Slot ];
+			Sels[ Slot ] = Sels[ Slot + 1 ];
+			Sels[ Slot + 1 ] = t;
 		}
 	}
 
@@ -518,10 +550,11 @@ public:
 
 	int select( CBiteRnd& rnd )
 	{
-		const double r = rnd.get();
-		Selp = (int) ( r * sqrt( r ) * CountSp );
+		Slot = rnd.getPowInt( 1.5, SlotCount );
+		Selp = rnd.getPowInt( 1.5, CountSp );
 
 		Sel = Sels[ Slot ][ Selp ];
+		IsSelected = true;
 
 		return( Sel );
 	}
@@ -535,35 +568,42 @@ public:
 		return( Sel );
 	}
 
+	/**
+	 * Function sets IsSelected value to "false".
+	 */
+
+	void unsetIsSelected()
+	{
+		IsSelected = false;
+	}
+
+	/**
+	 * Function returns "true" if the selection was made since the recent
+	 * increment or decrement.
+	 */
+
+	bool getIsSelected() const
+	{
+		return( IsSelected );
+	}
+
 protected:
-	static const int SlotCount = 4; ///< The number of choice vectors in use.
-		///<
+	static const int SlotCount = 5; ///< The number of choice vectors in use.
 	int Count; ///< The number of choices in use.
-		///<
 	int SparseMul; ///< Multiplier used to obtain an actual length of the
 		///< choice vector. This multiplier replicates choices in the vector,
 		///< increasing precision of the resulting PDF and its stability.
-		///<
 	int CountSp; ///< = Count * SparseMul. The actual length of the choice
 		///< vector.
-		///<
 	int CountSp1; ///< = CountSp - 1.
-		///<
-	int SelpThrs; ///< Threshold value for Slot switching.
-		///<
 	int* Sels[ SlotCount ]; ///< Choice vectors.
-		///<
 	int* SelBuf; ///< A singular buffer for Sels vectors.
-		///<
 	int SelBufCapacity; ///< Capacity of SelBuf.
-		///<
 	int Sel; ///< The latest selected choice. Available only after the
 		///< select() function calls.
-		///<
 	int Selp; ///< The index of the choice in the Sels vector.
-		///<
 	int Slot; ///< The current Sels vector, depending on incr/decr.
-		///<
+	bool IsSelected; ///< "True" if selection was recently made.
 };
 
 /**
@@ -585,7 +625,9 @@ public:
 
 /**
  * Class implements storage of population parameter vectors, costs, centroid,
- * and ordering.
+ * and ordering. Note that the derived classes should delete allocated buffers
+ * in their destructors, and not relying on the automatic deleteBuffers()
+ * function call.
  *
  * @tparam ptype Parameter value storage type.
  */
@@ -616,7 +658,9 @@ public:
 
 	virtual ~CBitePop()
 	{
-		deleteBuffers();
+		delete[] PopParamsBuf;
+		delete[] PopParams;
+		delete[] CentParams;
 	}
 
 	CBitePop& operator = ( const CBitePop& s )
@@ -950,7 +994,7 @@ public:
 	 * smaller than the PopSize, the new solution will be added to
 	 * population without any checks.
 	 *
-	 * @param UpdCost Cost of the new solution.
+	 * @param UpdCost Cost (rank) of the new solution.
 	 * @param UpdParams New parameter values.
 	 * @param DoUpdateCentroid "True" if centroid should be updated using
 	 * running sum. This update is done for parallel populations.
@@ -980,7 +1024,7 @@ public:
 			ri = PopSize1;
 
 			if( UpdCost != UpdCost || // Check for NaN.
-				UpdCost >= *getObjPtr( PopParams[ ri ]))
+				UpdCost >= *getRankPtr( PopParams[ ri ]))
 			{
 				return( PopSize );
 			}
@@ -995,7 +1039,7 @@ public:
 		{
 			const int mid = ( p + i ) >> 1;
 
-			if( *getObjPtr( PopParams[ mid ]) >= UpdCost )
+			if( *getRankPtr( PopParams[ mid ]) >= UpdCost )
 			{
 				i = mid;
 			}
@@ -1018,7 +1062,7 @@ public:
 				// solutions to remain in population.
 
 				static const double etol = 0x1p-52;
-				const double c = *getObjPtr( PopParams[ p ]);
+				const double c = *getRankPtr( PopParams[ p ]);
 				const double cd = fabs( UpdCost - c );
 
 				if( cd == 0.0 )
@@ -1078,73 +1122,47 @@ protected:
 	static const int IntOverBits = ( sizeof( ptype ) > 4 ? 5 : 3 ); ///< The
 		///< number of bits of precision required for integer centroid
 		///< calculation and overflows.
-		///<
 	static const int IntMantBits = sizeof( ptype ) * 8 - 1 - IntOverBits; ///<
 		///< Mantissa size of the integer parameter values (higher by 1 bit in
 		///< practice for real value 1.0). Accounts for a sign bit, and
 		///< possible accumulation overflows.
-		///<
 	static const int64_t IntMantMult = 1LL << IntMantBits; ///< Mantissa
 		///< multiplier.
-		///<
 	static const int64_t IntMantMultM = -IntMantMult; ///< Negative
 		///< IntMantMult.
-		///<
 	static const int64_t IntMantMult2 = ( IntMantMult << 1 ); ///< =
 		///< IntMantMult * 2.
-		///<
 	static const int64_t IntMantMask = IntMantMult - 1; ///< Mask that
 		///< corresponds to mantissa.
-		///<
 
 	int ParamCount; ///< The total number of internal parameter values in use.
-		///<
 	double ParamCountI; ///< = 1.0 / ParamCount.
-		///<
 	int PopSize; ///< The size of population in use (maximal).
-		///<
 	int PopSize1; ///< = PopSize - 1.
-		///<
 	int CurPopSize; ///< Current population size.
-		///<
 	int CurPopSize1; ///< = CurPopSize - 1.
-		///<
 	double CurPopSizeI; ///< = 1.0 / CurPopSize.
-		///<
 	int CurPopPos; ///< Current population position, for initial population
 		///< update. This variable should be initialized by the optimizer.
-		///<
 	int CnsCount; ///< The number of constraints per solution.
-		///<
 	int ObjCount; ///< The number of objectives per solution.
-		///<
 	uint8_t* PopParamsBuf; ///< Buffer for all PopParams vectors.
-		///<
 	ptype** PopParams; ///< Population parameter vectors. Always kept sorted
 		///< in ascending cost order. Each vector represents a complex item,
 		///< with additional data stored after parameter values (see Offs
 		///< constants).
-		///<
 	size_t PopCnsOffs; ///< Byte offset to the constraint values within
 		///< a population item.
-		///<
 	size_t PopObjOffs; ///< Byte offset to the objective values within a
 		///< population item.
-		///<
 	size_t PopRankOffs; ///< Byte offset to the rank value within a population
 		///< item.
-		///<
 	size_t PopItemSize; ///< Size in bytes of population item.
-		///<
 	ptype* CentParams; ///< Centroid of the parameter vectors.
-		///<
 	bool NeedCentUpdate; ///< "True" if centroid update is needed.
-		///<
-	double CentLPC; /// Centroid averaging filter coefficient.
-		///<
+	double CentLPC; ///< Centroid averaging filter coefficient.
 	ptype* TmpParams; ///< Temporary parameter vector, points to the last
 		///< element of the PopParams array.
-		///<
 
 	/**
 	 * Function deletes buffers previously allocated via the initBuffers()
@@ -1327,13 +1345,10 @@ protected:
 
 	static const int MaxParPopCount = 8; ///< The maximal number of parallel
 		///< population supported.
-		///<
 	CBitePop< ptype >* ParPops[ MaxParPopCount ]; ///< Parallel population
 		///< orbiting *this population.
-		///<
 	int ParPopCount; ///< Parallel population count. This variable should only
 		///< be changed via the setParPopCount() function.
-		///<
 
 	/**
 	 * Function changes the parallel population count, and reallocates
@@ -1554,6 +1569,16 @@ public:
 	{
 	}
 
+	virtual ~CBiteOptBase()
+	{
+		delete[] MinValues;
+		delete[] MaxValues;
+		delete[] DiffValues;
+		delete[] DiffValuesI;
+		delete[] BestValues;
+		delete[] NewValues;
+	}
+
 	virtual const double* getBestParams() const
 	{
 		return( BestValues );
@@ -1566,7 +1591,6 @@ public:
 
 	static const int MaxSelCount = 64; ///< The maximal number of selectors
 		///< that can be added to *this object (for static arrays).
-		///<
 
 	/**
 	 * Function returns a pointer to an array of selectors in use.
@@ -1602,44 +1626,28 @@ protected:
 	using CBiteParPops< ptype > :: copyValues;
 
 	double* MinValues; ///< Minimal parameter values.
-		///<
 	double* MaxValues; ///< Maximal parameter values.
-		///<
 	double* DiffValues; ///< Difference between maximal and minimal parameter
 		///< values.
-		///<
 	double* DiffValuesI; ///< Inverse DiffValues.
-		///<
 	double* BestValues; ///< Best parameter vector.
-		///<
 	double BestCost; ///< Cost of the best parameter vector.
-		///<
 	double* NewValues; ///< Temporary new parameter buffer, with real values.
-		///<
 	int StallCount; ///< The number of iterations without improvement.
-		///<
 	double HiBound; ///< Higher cost bound, for StallCount estimation. May not
 		///< be used by the optimizer.
-		///<
 	double AvgCost; ///< Average cost in the latest batch. May not be used by
 		///< the optimizer.
-		///<
 	CBiteSelBase* Sels[ MaxSelCount ]; ///< Pointers to selector objects, for
 		///< indexed access in some cases.
-		///<
 	const char* SelNames[ MaxSelCount ]; ///< Selector names.
-		///<
 	int SelCount; ///< The number of selectors in use.
-		///<
-	static const int MaxApplySels = 32; /// The maximal number of selections
+	static const int MaxApplySels = 32; ///< The maximal number of selections
 		///< that can be used during a single optimize() function call.
-		///<
 	CBiteSelBase* ApplySels[ MaxApplySels ]; ///< Selectors that were used in
 		///< select() function calls during the optimize() function call.
-		///<
 	int ApplySelsCount; ///< The number of select() calls performed during the
 		///< optimize() function call.
-		///<
 
 	virtual void initBuffers( const int aParamCount, const int aPopSize,
 		const int aCnsCount = 0, const int aObjCount = 1 )
@@ -1800,7 +1808,7 @@ protected:
 
 			if( v < maxv + dv )
 			{
-				return( maxv - rnd.get() * ( v - dv ));
+				return( maxv - rnd.get() * ( v - maxv ));
 			}
 
 			return( maxv - rnd.get() * dv );
