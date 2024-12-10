@@ -3,11 +3,13 @@
 /**
  * @file deopt.h
  *
+ * @version 2024.6
+ *
  * @brief The inclusion file for the CDEOpt class.
  *
  * @section license License
  *
- * Copyright (c) 2021-2023 Aleksey Vaneev
+ * Copyright (c) 2021-2024 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -26,8 +28,6 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- *
- * @version 2023.6
  */
 
 #ifndef DEOPT_INCLUDED
@@ -82,47 +82,8 @@ public:
 	{
 		initCommonVars( rnd );
 
-		const double sd = 0x1p-4 * InitRadius;
-		int i;
-		int j;
-
-		if( InitParams == NULL )
-		{
-			for( j = 0; j < PopSize; j++ )
-			{
-				ptype* const p = PopParams[ j ];
-
-				for( i = 0; i < ParamCount; i++ )
-				{
-					p[ i ] = wrapParam( rnd, getGaussianInt(
-						rnd, sd, IntMantMult >> 1 ));
-				}
-			}
-		}
-		else
-		{
-			ptype* const p0 = PopParams[ 0 ];
-
-			for( i = 0; i < ParamCount; i++ )
-			{
-				p0[ i ] = wrapParam( rnd,
-					(ptype) (( InitParams[ i ] - MinValues[ i ]) /
-					DiffValues[ i ]));
-			}
-
-			for( j = 1; j < PopSize; j++ )
-			{
-				ptype* const p = PopParams[ j ];
-
-				for( i = 0; i < ParamCount; i++ )
-				{
-					p[ i ] = wrapParam( rnd,
-						getGaussianInt( rnd, sd, p0[ i ]));
-				}
-			}
-		}
-
-		DoInitEvals = true;
+		StartSD = 0x1p-4 * InitRadius;
+		setStartParams( InitParams );
 	}
 
 	/**
@@ -130,41 +91,23 @@ public:
 	 * objective function evaluation.
 	 *
 	 * @param rnd Random number generator.
-	 * @param[out] OutCost If not NULL, pointer to variable that receives cost
-	 * of the newly-evaluated solution.
-	 * @param[out] OutValues If not NULL, pointer to array that receives a
-	 * newly-evaluated parameter vector, in real scale, in real value bounds.
 	 * @return The number of non-improving iterations so far.
 	 */
 
-	int optimize( CBiteRnd& rnd, double* const OutCost = NULL,
-		double* const OutValues = NULL )
+	int optimize( CBiteRnd& rnd )
 	{
 		int i;
 
 		if( DoInitEvals )
 		{
-			const ptype* const Params = getCurParams();
+			ptype* const Params = getCurParams();
 
-			for( i = 0; i < ParamCount; i++ )
-			{
-				NewValues[ i ] = getRealValue( Params, i );
-			}
+			genInitParams( rnd, Params );
 
-			const double NewCost = optcost( NewValues );
+			const double NewCost = fixCostNaN( optcost( NewValues ));
+			NewCosts[ 0 ] = NewCost;
 
-			if( OutCost != NULL )
-			{
-				*OutCost = NewCost;
-			}
-
-			if( OutValues != NULL )
-			{
-				copyValues( OutValues, NewValues );
-			}
-
-			updateBestCost( NewCost, NewValues,
-				updatePop( NewCost, Params, false ));
+			updateBestCost( NewCost, NewValues, updatePop( NewCost, Params ));
 
 			if( CurPopPos == PopSize )
 			{
@@ -236,11 +179,11 @@ public:
 
 			// Produce sparsely-random bit-strings.
 
-			const ptype v1 = (ptype) ( rnd.getRaw() & rnd.getRaw() &
-				rnd.getRaw() & rnd.getRaw() & rnd.getRaw() & IntMantMask );
+			const ptype v1 = rnd.getRaw() & rnd.getRaw() & rnd.getRaw() &
+				rnd.getRaw() & rnd.getRaw() & IntMantMask;
 
-			const ptype v2 = (ptype) ( rnd.getRaw() & rnd.getRaw() &
-				rnd.getRaw() & rnd.getRaw() & rnd.getRaw() & IntMantMask );
+			const ptype v2 = rnd.getRaw() & rnd.getRaw() & rnd.getRaw() &
+				rnd.getRaw() & rnd.getRaw() & IntMantMask;
 
 			TmpParams[ k ] += v1 - v2; // Apply in TPDF manner.
 		}
@@ -276,19 +219,10 @@ public:
 			NewValues[ i ] = getRealValue( TmpParams, i );
 		}
 
-		const double NewCost = optcost( NewValues );
+		const double NewCost = fixCostNaN( optcost( NewValues ));
+		NewCosts[ 0 ] = NewCost;
 
-		if( OutCost != NULL )
-		{
-			*OutCost = NewCost;
-		}
-
-		if( OutValues != NULL )
-		{
-			copyValues( OutValues, NewValues );
-		}
-
-		const int p = updatePop( NewCost, TmpParams, false, false );
+		const int p = updatePop( NewCost, TmpParams );
 
 		if( p < CurPopSize )
 		{
@@ -302,9 +236,6 @@ public:
 
 		return( StallCount );
 	}
-
-protected:
-	bool DoInitEvals; ///< "True" if initial evaluations should be performed.
 };
 
 #endif // DEOPT_INCLUDED

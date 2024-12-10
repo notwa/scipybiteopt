@@ -3,11 +3,13 @@
 /**
  * @file nmsopt.h
  *
+ * @version 2024.6
+ *
  * @brief The inclusion file for the CNMSeqOpt class.
  *
  * @section license License
  * 
- * Copyright (c) 2016-2022 Aleksey Vaneev
+ * Copyright (c) 2016-2024 Aleksey Vaneev
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -26,8 +28,6 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- *
- * @version 2023.6
  */
 
 #ifndef NMSOPT_INCLUDED
@@ -91,16 +91,13 @@ public:
 	 * @param rnd Random number generator.
 	 * @param InitParams If not NULL, initial parameter vector, also used as
 	 * centroid.
-	 * @param InitRadius Initial radius, relative to the default value. Set
-	 * to negative to use uniformly-random sampling.
+	 * @param InitRadius Initial radius, relative to the default value.
 	 */
 
 	void init( CBiteRnd& rnd, const double* const InitParams = NULL,
 		const double InitRadius = 1.0 )
 	{
 		initCommonVars( rnd );
-
-		// Initialize parameter vectors, costs and centroid.
 
 		double* const xx = x[ 0 ];
 		int i;
@@ -120,36 +117,19 @@ public:
 
 		xlo = 0;
 
-		if( InitRadius <= 0.0 )
+		const double sd = 0.25 * InitRadius;
+
+		for( j = 1; j < M; j++ )
 		{
-			for( j = 1; j < M; j++ )
+			double* const xj = x[ j ];
+
+			for( i = 0; i < N; i++ )
 			{
-				double* const xj = x[ j ];
-
-				for( i = 0; i < N; i++ )
-				{
-					xj[ i ] = MinValues[ i ] + DiffValues[ i ] * rnd.get();
-				}
-			}
-		}
-		else
-		{
-			const double sd = 0.25 * InitRadius;
-
-			for( j = 1; j < M; j++ )
-			{
-				double* const xj = x[ j ];
-
-				for( i = 0; i < N; i++ )
-				{
-					xj[ i ] = xx[ i ] + DiffValues[ i ] *
-						rnd.getGaussian() * sd;
-				}
+				xj[ i ] = xx[ i ] + DiffValues[ i ] * rnd.getGaussian() * sd;
 			}
 		}
 
 		State = stReflection;
-		DoInitEvals = true;
 	}
 
 	/**
@@ -157,21 +137,16 @@ public:
 	 * objective function evaluation.
 	 *
 	 * @param rnd Random number generator.
-	 * @param[out] OutCost If not NULL, pointer to variable that receives cost
-	 * of the newly-evaluated solution.
-	 * @param[out] OutValues If not NULL, pointer to array that receives
-	 * newly-evaluated parameter vector, in real scale.
 	 * @return The number of non-improving iterations so far.
 	 */
 
-	int optimize( CBiteRnd& rnd, double* const OutCost = NULL,
-		double* const OutValues = NULL )
+	int optimize( CBiteRnd& rnd )
 	{
 		int i;
 
 		if( DoInitEvals )
 		{
-			y[ CurPopPos ] = eval( rnd, x[ CurPopPos ], OutCost, OutValues );
+			y[ CurPopPos ] = eval( rnd, x[ CurPopPos ]);
 
 			if( y[ CurPopPos ] < y[ xlo ])
 			{
@@ -209,7 +184,7 @@ public:
 					x1[ i ] = x0[ i ] + alpha * ( x0[ i ] - xH[ i ]);
 				}
 
-				y1 = eval( rnd, x1, OutCost, OutValues );
+				y1 = eval( rnd, x1 );
 
 				if( y1 > y[ xlo ] && y1 < y[ xhi2 ])
 				{
@@ -238,7 +213,7 @@ public:
 					x2[ i ] = x0[ i ] + gamma * ( x0[ i ] - xH[ i ]);
 				}
 
-				const double y2 = eval( rnd, x2, OutCost, OutValues );
+				const double y2 = eval( rnd, x2 );
 				xlo = xhi;
 
 				if( y2 < y1 )
@@ -261,7 +236,7 @@ public:
 					x2[ i ] = x0[ i ] + rho * ( x0[ i ] - xH[ i ]);
 				}
 
-				const double y2 = eval( rnd, x2, OutCost, OutValues );
+				const double y2 = eval( rnd, x2 );
 
 				if( y2 < y[ xhi ])
 				{
@@ -298,7 +273,7 @@ public:
 					xx[ i ] = rx[ i ] + sigma * ( xx[ i ] - rx[ i ]);
 				}
 
-				y[ rj ] = eval( rnd, xx, OutCost, OutValues );
+				y[ rj ] = eval( rnd, xx );
 
 				if( y[ rj ] < y[ xlo ])
 				{
@@ -338,7 +313,6 @@ private:
 	double* x2; ///< Temporary parameter vector 2.
 	double* rx; ///< Lowest-cost parameter vector used during reduction.
 	int rj; ///< Current vector index during reduction.
-	bool DoInitEvals; ///< "True" if initial evaluations should be performed.
 
 	/**
 	 * Algorithm's state automata states.
@@ -487,14 +461,9 @@ private:
 	 *
 	 * @param rnd Random number generator.
 	 * @param Params Parameter vector to evaluate.
-	 * @param[out] OutCost If not NULL, pointer to variable that receives cost
-	 * of the newly-evaluated solution.
-	 * @param[out] OutValues If not NULL, pointer to array that receives
-	 * newly-evaluated parameter vector, in real scale.
 	 */
 
-	double eval( CBiteRnd& rnd, const double* const Params,
-		double* const OutCost = NULL, double* const OutValues = NULL )
+	double eval( CBiteRnd& rnd, const double* const Params )
 	{
 		int i;
 
@@ -503,21 +472,12 @@ private:
 			NewValues[ i ] = wrapParamReal( rnd, Params[ i ], i );
 		}
 
-		const double Cost = optcost( NewValues );
+		const double NewCost = fixCostNaN( optcost( NewValues ));
+		NewCosts[ 0 ] = NewCost;
 
-		if( OutCost != NULL )
-		{
-			*OutCost = Cost;
-		}
+		updateBestCost( NewCost, NewValues );
 
-		if( OutValues != NULL )
-		{
-			copyValues( OutValues, NewValues );
-		}
-
-		updateBestCost( Cost, NewValues );
-
-		return( Cost );
+		return( NewCost );
 	}
 };
 

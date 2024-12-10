@@ -3,11 +3,13 @@
 /**
  * @file smaesopt.h
  *
+ * @version 2024.6
+ *
  * @brief The inclusion file for the CSMAESOpt class.
  *
  * @section license License
  *
- * Copyright (c) 2016-2022 Aleksey Vaneev
+ * Copyright (c) 2016-2024 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -26,8 +28,6 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- *
- * @version 2023.6
  */
 
 #ifndef SMAESOPT_INCLUDED
@@ -157,33 +157,20 @@ public:
 	 * objective function evaluation.
 	 *
 	 * @param rnd Random number generator.
-	 * @param[out] OutCost If not NULL, pointer to variable that receives cost
-	 * of the newly-evaluated solution.
-	 * @param[out] OutValues If not NULL, pointer to array that receives a
-	 * newly-evaluated parameter vector, in real scale, in real value bounds.
 	 * @return The number of non-improving iterations so far.
 	 */
 
-	int optimize( CBiteRnd& rnd, double* const OutCost = NULL,
-		double* const OutValues = NULL )
+	int optimize( CBiteRnd& rnd )
 	{
 		double* const Params = getCurParams();
 
 		sample( rnd, Params );
 
-		const double NewCost = optcost( Params );
+		const double NewCost = fixCostNaN( optcost( Params ));
+		NewCosts[ 0 ] = NewCost;
+		LastValues = Params;
 
-		if( OutCost != NULL )
-		{
-			*OutCost = NewCost;
-		}
-
-		if( OutValues != NULL )
-		{
-			copyValues( OutValues, Params );
-		}
-
-		updatePop( NewCost, Params, false );
+		updatePop( NewCost, Params );
 		updateBestCost( NewCost, Params );
 
 		AvgCost += NewCost;
@@ -196,11 +183,6 @@ public:
 			if( AvgCost < HiBound )
 			{
 				HiBound = AvgCost;
-				StallCount = 0;
-			}
-			else
-			{
-				StallCount += cure;
 			}
 
 			resetCurPopPos();
@@ -209,6 +191,8 @@ public:
 
 			Ort.update( *this );
 		}
+
+		StallCount = ( NewCost < HiBound ? 0 : StallCount + 1 );
 
 		return( StallCount );
 	}

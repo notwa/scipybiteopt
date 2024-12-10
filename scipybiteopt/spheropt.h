@@ -3,11 +3,13 @@
 /**
  * @file spheropt.h
  *
+ * @version 2024.6
+ *
  * @brief The inclusion file for the CSpherOpt class.
  *
  * @section license License
  *
- * Copyright (c) 2016-2023 Aleksey Vaneev
+ * Copyright (c) 2016-2024 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -26,8 +28,6 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- *
- * @version 2023.6
  */
 
 #ifndef SPHEROPT_INCLUDED
@@ -113,7 +113,7 @@ public:
 				CentParams[ i ] = 0.5;
 			}
 
-			DoCentEval = false;
+			DoInitEvals = false;
 		}
 		else
 		{
@@ -122,8 +122,6 @@ public:
 				CentParams[ i ] = wrapParam( rnd,
 					( InitParams[ i ] - MinValues[ i ]) / DiffValues[ i ]);
 			}
-
-			DoCentEval = true;
 		}
 	}
 
@@ -132,22 +130,17 @@ public:
 	 * objective function evaluation.
 	 *
 	 * @param rnd Random number generator.
-	 * @param[out] OutCost If not NULL, pointer to variable that receives cost
-	 * of the newly-evaluated solution.
-	 * @param[out] OutValues If not NULL, pointer to array that receives a
-	 * newly-evaluated parameter vector, in real scale, in real value bounds.
 	 * @return The number of non-improving iterations so far.
 	 */
 
-	int optimize( CBiteRnd& rnd, double* const OutCost = NULL,
-		double* const OutValues = NULL )
+	int optimize( CBiteRnd& rnd )
 	{
 		double* const Params = getCurParams();
 		int i;
 
-		if( DoCentEval )
+		if( DoInitEvals )
 		{
-			DoCentEval = false;
+			DoInitEvals = false;
 
 			for( i = 0; i < ParamCount; i++ )
 			{
@@ -191,19 +184,10 @@ public:
 			}
 		}
 
-		const double NewCost = optcost( NewValues );
+		const double NewCost = fixCostNaN( optcost( NewValues ));
+		NewCosts[ 0 ] = NewCost;
 
-		if( OutCost != NULL )
-		{
-			*OutCost = NewCost;
-		}
-
-		if( OutValues != NULL )
-		{
-			copyValues( OutValues, NewValues );
-		}
-
-		updatePop( NewCost, Params, false );
+		updatePop( NewCost, Params );
 		updateBestCost( NewCost, NewValues );
 
 		AvgCost += NewCost;
@@ -216,14 +200,11 @@ public:
 			if( AvgCost < HiBound )
 			{
 				HiBound = AvgCost;
-				StallCount = 0;
 
 				applySelsIncr( rnd );
 			}
 			else
 			{
-				StallCount += cure;
-
 				applySelsDecr( rnd );
 			}
 
@@ -235,6 +216,8 @@ public:
 
 			curem = (int) ceil( CurPopSize * EvalFac );
 		}
+
+		StallCount = ( NewCost < HiBound ? 0 : StallCount + 1 );
 
 		return( StallCount );
 	}
@@ -248,8 +231,6 @@ protected:
 	double EvalFac; ///< Evaluations factor.
 	int cure; ///< Current evaluation index.
 	int curem; ///< "cure" value threshold.
-	bool DoCentEval; ///< "True" if an initial objective function evaluation
-		///< at centroid point is required.
 	CBiteSel< 4 > CentPowSel; ///< Centroid power factor selector.
 	CBiteSel< 4 > RadPowSel; ///< Radius power factor selector.
 	CBiteSel< 3 > EvalFacSel; ///< EvalFac selector.
